@@ -1,0 +1,6 @@
+{
+  "name": "imposterfrnd",
+  "description": "Professional multiplayer arena combat with room-based lobbies, CPU mode, limited ammo, and neon weapon systems.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
