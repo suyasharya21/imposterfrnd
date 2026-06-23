@@ -26,8 +26,15 @@ export function Minimap() {
   const obstacles = useMemo(() => getObstacles(isMobile, arenaSeed), [isMobile, arenaSeed]);
   const activeEnemies = useMemo(() => enemies.filter(e => e.state === 'active'), [enemies]);
 
-  const ZOOM = 2.5; 
+  const ZOOM = 1.2; 
   const pixelsPerUnit = (MAP_SIZE / ARENA_SIZE) * ZOOM;
+
+  const boundaryWalls = useMemo(() => [
+    { name: 'wall-n', position: [0, 0, -100] as [number, number, number], size: [200, 12, 1] as [number, number, number], rotation: [0, 0, 0] as [number, number, number], color: '#39ff14' },
+    { name: 'wall-s', position: [0, 0, 100] as [number, number, number], size: [200, 12, 1] as [number, number, number], rotation: [0, Math.PI, 0] as [number, number, number], color: '#ff0055' },
+    { name: 'wall-e', position: [100, 0, 0] as [number, number, number], size: [200, 12, 1] as [number, number, number], rotation: [0, -Math.PI / 2, 0] as [number, number, number], color: '#00f0ff' },
+    { name: 'wall-w', position: [-100, 0, 0] as [number, number, number], size: [200, 12, 1] as [number, number, number], rotation: [0, Math.PI / 2, 0] as [number, number, number], color: '#ffff00' }
+  ], []);
 
   // Rotation for the Map (Player's forward is always UP)
   const mapRotationDeg = (playerRotation * 180) / Math.PI;
@@ -74,7 +81,7 @@ export function Minimap() {
             transform: `translate(${-pX}px, ${-pZ}px)`,
           }}
         >
-          {/* Arena Outer Boundary */}
+          {/* Arena Outer Boundary & Cyber-Grid Background */}
           <div 
             className="absolute border-2 border-lime-400/30 pointer-events-none z-0"
             style={{
@@ -82,7 +89,12 @@ export function Minimap() {
               top: ( -ARENA_HALF_SIZE ) * pixelsPerUnit + (MAP_SIZE / 2),
               width: ARENA_SIZE * pixelsPerUnit,
               height: ARENA_SIZE * pixelsPerUnit,
-              background: 'radial-gradient(circle, transparent 60%, rgba(163,230,53,0.05) 100%)',
+              backgroundImage: `
+                radial-gradient(circle, transparent 60%, rgba(163,230,53,0.05) 100%),
+                linear-gradient(to right, rgba(163, 230, 53, 0.08) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(163, 230, 53, 0.08) 1px, transparent 1px)
+              `,
+              backgroundSize: `auto, ${10 * pixelsPerUnit}px ${10 * pixelsPerUnit}px`,
             }}
           />
 
@@ -103,6 +115,30 @@ export function Minimap() {
                   width: `${Math.max(3, w)}px`,
                   height: `${Math.max(3, isCylinder ? w : d)}px`,
                   transform: `translate(-50%, -50%) rotate(${-(obs.rotation[1] * 180) / Math.PI}deg)`,
+                }}
+              />
+            );
+          })}
+
+          {/* Boundary Walls */}
+          {boundaryWalls.map((wall) => {
+            const { x, z } = getMapCoords(wall.position);
+            const w = wall.size[0] * pixelsPerUnit;
+            const d = wall.size[2] * pixelsPerUnit;
+            
+            return (
+              <div 
+                key={wall.name}
+                className="absolute z-[2]"
+                style={{ 
+                  left: `${x + MAP_SIZE / 2}px`, 
+                  top: `${z + MAP_SIZE / 2}px`,
+                  width: `${Math.max(3, w)}px`,
+                  height: `${Math.max(3, d)}px`,
+                  backgroundColor: wall.color + 'cc',
+                  border: `1px solid ${wall.color}`,
+                  boxShadow: `0 0 10px ${wall.color}`,
+                  transform: `translate(-50%, -50%) rotate(${-(wall.rotation[1] * 180) / Math.PI}deg)`,
                 }}
               />
             );

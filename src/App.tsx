@@ -28,22 +28,38 @@ function HUD() {
   const enemies = useGameStore(state => state.enemies);
 
   const leaderboard = useMemo(() => {
-    const players = [
-      { id: 'You', score: score, isMe: true },
-      ...Object.values(otherPlayers).map(p => ({
-        id: p.name,
-        score: p.score,
-        isMe: false
-      })),
-      ...enemies.map(e => ({
-        id: e.id,
-        score: e.score,
-        isMe: false
-      }))
-    ];
+    const players = [];
+
+    // Add local player if active
+    if (playerState === 'active') {
+      players.push({ id: 'You', score: score, isMe: true });
+    }
+
+    // Add other players if active
+    Object.values(otherPlayers).forEach(p => {
+      if (p.state === 'active') {
+        players.push({
+          id: p.name,
+          score: p.score,
+          isMe: false
+        });
+      }
+    });
+
+    // Add enemies (bots) if active
+    enemies.forEach(e => {
+      if (e.state === 'active') {
+        players.push({
+          id: e.id,
+          score: e.score,
+          isMe: false
+        });
+      }
+    });
+
     // Sort by score descending and take top 4
     return players.sort((a, b) => b.score - a.score).slice(0, 4);
-  }, [score, otherPlayers, enemies]);
+  }, [score, playerState, otherPlayers, enemies]);
 
   return (
     <>
@@ -571,6 +587,31 @@ export default function App() {
               setMenuView('main');
             }}
             className="px-12 py-5 bg-lime-500/10 border-2 border-lime-400 text-lime-400 text-2xl font-black rounded hover:bg-lime-400 hover:text-black transition-all duration-300 shadow-[0_0_30px_rgba(163,230,53,0.3)] uppercase tracking-widest"
+          >
+            System Reboot
+          </button>
+        </div>
+      )}
+
+      {gameState === 'victory' && (
+        <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-[200] pointer-events-auto backdrop-blur-xl text-center animate-in fade-in duration-500">
+          <div className="absolute w-[450px] h-[450px] bg-lime-500/15 rounded-full blur-[100px] pointer-events-none z-0 animate-pulse" />
+          
+          <h1 className="text-7xl md:text-9xl font-black text-lime-400 mb-4 drop-shadow-[0_0_40px_rgba(163,230,53,0.9)] tracking-tighter italic uppercase underline decoration-4 underline-offset-8 z-10 animate-bounce">
+            VICTORY
+          </h1>
+          <div className="text-lg md:text-2xl text-white/80 uppercase font-black tracking-[0.2em] mb-8 z-10">
+            ALL CPU BOTS ELIMINATED!
+          </div>
+          <div className="text-3xl md:text-5xl text-lime-400 mb-12 font-black tracking-tighter z-10 bg-lime-400/10 border-2 border-lime-400/30 px-8 py-5 rounded-2xl shadow-[0_0_35px_rgba(163,230,53,0.2)]">
+            FINAL SCORE: {score}
+          </div>
+          <button
+            onMouseDown={() => {
+              useGameStore.getState().leaveGame();
+              setMenuView('main');
+            }}
+            className="px-12 py-5 bg-lime-500/10 border-2 border-lime-400 text-lime-400 text-2xl font-black rounded hover:bg-lime-400 hover:text-black hover:scale-105 active:scale-95 transition-all duration-300 shadow-[0_0_30px_rgba(163,230,53,0.4)] uppercase tracking-widest z-10"
           >
             System Reboot
           </button>

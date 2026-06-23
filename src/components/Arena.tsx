@@ -51,7 +51,7 @@ export function Arena() {
       <Grid position={[0, 0.05, 0]} args={[200, 200]} cellColor="#ff0055" sectionColor="#39ff14" fadeDistance={120} cellThickness={0.5} sectionThickness={2} />
 
       {/* Ceiling / Roof Grid */}
-      <RigidBody type="fixed" name="ceiling">
+      <RigidBody type="fixed" name="ceiling" colliders={false}>
         <group position={[0, 20, 0]}>
           <Grid args={[200, 200]} cellColor="#39ff14" sectionColor="#ff0055" fadeDistance={150} cellThickness={0.5} sectionThickness={1.5} rotation={[Math.PI, 0, 0]} />
           <mesh rotation={[Math.PI / 2, 0, 0]}>
@@ -62,10 +62,10 @@ export function Arena() {
       </RigidBody>
 
       {/* Walls */}
-      <Wall name="wall-n" position={[0, 6, -100]} rotation={[0, 0, 0]} isMobile={isMobile} graffiti={['neon_bolt', 'om', 'neon_gun', 'tag1', 'neon_eye']} />
-      <Wall name="wall-s" position={[0, 6, 100]} rotation={[0, Math.PI, 0]} isMobile={isMobile} graffiti={['neon_grid', 'chakra', 'neon_skull', 'tag2', 'cyber']} />
-      <Wall name="wall-e" position={[100, 6, 0]} rotation={[0, -Math.PI / 2, 0]} isMobile={isMobile} graffiti={['neon_eye', 'lotus', 'neon_bolt', 'hanuman', 'skull']} />
-      <Wall name="wall-w" position={[-100, 6, 0]} rotation={[0, Math.PI / 2, 0]} isMobile={isMobile} graffiti={['neon_gun', 'shiva_eye', 'neon_grid', 'om', 'neon_skull']} />
+      <Wall name="wall-n" position={[0, 0, -100]} rotation={[0, 0, 0]} isMobile={isMobile} graffiti={['neon_bolt', 'om', 'neon_gun', 'tag1', 'neon_eye']} />
+      <Wall name="wall-s" position={[0, 0, 100]} rotation={[0, Math.PI, 0]} isMobile={isMobile} graffiti={['neon_grid', 'chakra', 'neon_skull', 'tag2', 'cyber']} />
+      <Wall name="wall-e" position={[100, 0, 0]} rotation={[0, -Math.PI / 2, 0]} isMobile={isMobile} graffiti={['neon_eye', 'lotus', 'neon_bolt', 'hanuman', 'skull']} />
+      <Wall name="wall-w" position={[-100, 0, 0]} rotation={[0, Math.PI / 2, 0]} isMobile={isMobile} graffiti={['neon_gun', 'shiva_eye', 'neon_grid', 'om', 'neon_skull']} />
 
       {/* Obstacles */}
       {obstacles.map((obs, i) => {
@@ -76,31 +76,77 @@ export function Arena() {
             type="fixed" 
             colliders={false}
             name={`obstacle-${i}`}
-            position={obs.position as [number, number, number]}
+            position={[obs.position[0], 0, obs.position[2]]}
             rotation={obs.rotation as [number, number, number]}
           >
             {obs.type === 'box' ? (
-              <CuboidCollider args={[obs.size[0] / 2, obs.size[1] / 2, obs.size[2] / 2]} />
+              <CuboidCollider args={[obs.size[0] / 2, obs.size[1] / 2, obs.size[2] / 2]} position={[0, obs.size[1] / 2, 0]} />
             ) : (
-              <CylinderCollider args={[obs.size[1] / 2, obs.size[0] / 2]} />
+              <CylinderCollider args={[obs.size[1] / 2, obs.size[0] / 2]} position={[0, obs.size[1] / 2, 0]} />
             )}
-            <mesh receiveShadow={!isMobile} castShadow={!isMobile}>
+            <mesh receiveShadow={!isMobile} castShadow={!isMobile} position={[0, obs.size[1] / 2, 0]}>
               {obs.type === 'box' ? (
                 <boxGeometry args={obs.size as [number, number, number]} />
               ) : (
                 <cylinderGeometry args={[obs.size[0]/2, obs.size[0]/2, obs.size[1], 16]} />
               )}
-              <meshStandardMaterial color="#1a1a2e" roughness={0.6} metalness={0.5} />
+              {/* Premium Carbon Fiber Material */}
+              <meshStandardMaterial color="#05050a" roughness={0.25} metalness={0.9} />
               
-              {/* Neon accent on obstacles */}
-              <mesh position={[0, obs.size[1]/2 - 0.5, 0]}>
+              {/* Neon Cap Trim */}
+              <mesh position={[0, obs.size[1]/2 - 0.1, 0]}>
                 {obs.type === 'box' ? (
-                  <boxGeometry args={[obs.size[0] + 0.1, 0.2, obs.size[2] + 0.1]} />
+                  <boxGeometry args={[obs.size[0] + 0.05, 0.2, obs.size[2] + 0.05]} />
                 ) : (
-                  <cylinderGeometry args={[obs.size[0]/2 + 0.1, obs.size[0]/2 + 0.1, 0.2, 16]} />
+                  <cylinderGeometry args={[obs.size[0]/2 + 0.05, obs.size[0]/2 + 0.05, 0.2, 16]} />
                 )}
                 <meshBasicMaterial color={obs.color} toneMapped={false} />
               </mesh>
+
+              {/* Neon Base Trim */}
+              <mesh position={[0, -obs.size[1]/2 + 0.1, 0]}>
+                {obs.type === 'box' ? (
+                  <boxGeometry args={[obs.size[0] + 0.05, 0.2, obs.size[2] + 0.05]} />
+                ) : (
+                  <cylinderGeometry args={[obs.size[0]/2 + 0.05, obs.size[0]/2 + 0.05, 0.2, 16]} />
+                )}
+                <meshBasicMaterial color={obs.color} toneMapped={false} />
+              </mesh>
+
+              {/* Vertical Glowing Conduits on box corners for taller obstacles */}
+              {obs.type === 'box' && obs.size[1] > 6 && (
+                <>
+                  <mesh position={[obs.size[0]/2 + 0.02, 0, obs.size[2]/2 + 0.02]}>
+                    <cylinderGeometry args={[0.04, 0.04, obs.size[1], 8]} />
+                    <meshBasicMaterial color={obs.color} toneMapped={false} />
+                  </mesh>
+                  <mesh position={[-obs.size[0]/2 - 0.02, 0, obs.size[2]/2 + 0.02]}>
+                    <cylinderGeometry args={[0.04, 0.04, obs.size[1], 8]} />
+                    <meshBasicMaterial color={obs.color} toneMapped={false} />
+                  </mesh>
+                  <mesh position={[obs.size[0]/2 + 0.02, 0, -obs.size[2]/2 - 0.02]}>
+                    <cylinderGeometry args={[0.04, 0.04, obs.size[1], 8]} />
+                    <meshBasicMaterial color={obs.color} toneMapped={false} />
+                  </mesh>
+                  <mesh position={[-obs.size[0]/2 - 0.02, 0, -obs.size[2]/2 - 0.02]}>
+                    <cylinderGeometry args={[0.04, 0.04, obs.size[1], 8]} />
+                    <meshBasicMaterial color={obs.color} toneMapped={false} />
+                  </mesh>
+                </>
+              )}
+
+              {/* Vertical Glowing Conduits on cylinder sides for taller obstacles */}
+              {obs.type === 'cylinder' && obs.size[1] > 6 && (
+                [0, Math.PI/2, Math.PI, -Math.PI/2].map((angle, idx) => {
+                  const radius = obs.size[0]/2 + 0.02;
+                  return (
+                    <mesh key={idx} position={[radius * Math.cos(angle), 0, radius * Math.sin(angle)]}>
+                      <cylinderGeometry args={[0.04, 0.04, obs.size[1], 8]} />
+                      <meshBasicMaterial color={obs.color} toneMapped={false} />
+                    </mesh>
+                  );
+                })
+              )}
 
               {/* Graffiti on large walls */}
               {obs.graffitiType && obs.type === 'box' && (
@@ -115,10 +161,7 @@ export function Arena() {
 }
 
 function Graffiti({ type, size, opacity = 1 }: { type: 'bow' | 'chakra' | 'hanuman' | 'om' | 'lotus' | 'shiva_eye' | 'trishula' | 'tag1' | 'tag2' | 'cyber' | 'skull' | 'neon_bolt' | 'neon_eye' | 'neon_grid' | 'neon_skull' | 'neon_gun', size: [number, number, number], opacity?: number }) {
-  // Determine which side to put graffiti on
   const isWide = size[0] > size[2];
-  const sidePos = isWide ? [0, 0, size[2] / 2 + 0.05] : [size[0] / 2 + 0.05, 0, 0];
-  const sideRot = isWide ? [0, 0, 0] : [0, Math.PI / 2, 0];
   const graffitiScale = Math.min(size[0], size[1], size[2], 8);
 
   const getGraffitiContent = () => {
@@ -227,79 +270,103 @@ function Graffiti({ type, size, opacity = 1 }: { type: 'bow' | 'chakra' | 'hanum
   };
   const color = colors[type] || '#ffffff';
 
+  // Define the two opposite sides for double-sided rendering
+  const sides = isWide 
+    ? [
+        { pos: [0, 0, size[2] / 2 + 0.02], rot: [0, 0, 0] },
+        { pos: [0, 0, -size[2] / 2 - 0.02], rot: [0, Math.PI, 0] }
+      ]
+    : [
+        { pos: [size[0] / 2 + 0.02, 0, 0], rot: [0, Math.PI / 2, 0] },
+        { pos: [-size[0] / 2 - 0.02, 0, 0], rot: [0, -Math.PI / 2, 0] }
+      ];
+
   return (
-    <group position={sidePos as [number, number, number]} rotation={sideRot as [number, number, number]}>
-      <mesh>
-        <planeGeometry args={[graffitiScale, graffitiScale]} />
-        <meshBasicMaterial transparent opacity={0} />
-      </mesh>
-      <group scale={[graffitiScale/30, -graffitiScale/30, 1]} position={[-graffitiScale/2, graffitiScale/2, 0.01]}>
-         <Html transform distanceFactor={graffitiScale * 1.5} pointerEvents="none" portal={{ current: undefined }}>
-            <div style={{ 
-              color, 
-              opacity,
-              filter: `drop-shadow(0 0 8px ${color})`, 
-              width: '120px', 
-              height: '120px', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              animation: 'flicker 3s infinite'
-            }}>
-              <style>{`
-                @keyframes flicker {
-                  0%, 100% { opacity: 0.8; }
-                  50% { opacity: 1; }
-                  45%, 55% { opacity: 0.7; }
-                }
-              `}</style>
-              <svg viewBox="0 0 30 30" width="100%" height="100%">
-                {getGraffitiContent()}
-              </svg>
-            </div>
-         </Html>
-      </group>
-    </group>
+    <>
+      {sides.map((side, index) => (
+        <group key={index} position={side.pos as [number, number, number]} rotation={side.rot as [number, number, number]}>
+          <mesh>
+            <planeGeometry args={[graffitiScale, graffitiScale]} />
+            <meshBasicMaterial transparent opacity={0} />
+          </mesh>
+          <group scale={[graffitiScale/30, -graffitiScale/30, 1]} position={[-graffitiScale/2, graffitiScale/2, 0.01]}>
+             <Html transform distanceFactor={graffitiScale * 1.5} pointerEvents="none" portal={{ current: undefined }}>
+                <div style={{ 
+                  color, 
+                  opacity,
+                  filter: `drop-shadow(0 0 12px ${color})`, 
+                  width: '120px', 
+                  height: '120px', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  animation: 'flicker 3s infinite'
+                }}>
+                  <style>{`
+                    @keyframes flicker {
+                      0%, 100% { opacity: 0.8; }
+                      50% { opacity: 1; }
+                      45%, 55% { opacity: 0.7; }
+                    }
+                  `}</style>
+                  <svg viewBox="0 0 30 30" width="100%" height="100%">
+                    {getGraffitiContent()}
+                  </svg>
+                </div>
+             </Html>
+          </group>
+        </group>
+      ))}
+    </>
   );
 }
 
 function Wall({ name, position, rotation, isMobile, graffiti = [] }: { name: string, position: [number, number, number], rotation: [number, number, number], isMobile: boolean, graffiti?: ('bow' | 'chakra' | 'hanuman' | 'om' | 'lotus' | 'shiva_eye' | 'trishula' | 'tag1' | 'tag2' | 'cyber' | 'skull' | 'neon_bolt' | 'neon_eye' | 'neon_grid' | 'neon_skull' | 'neon_gun')[] }) {
+  const adjustedPosition: [number, number, number] = [position[0], 0, position[2]];
+  
   return (
-    <RigidBody type="fixed" name={name} position={position} rotation={rotation} colliders={false} ccd={true}>
-      <CuboidCollider args={[100, 6, 0.5]} />
-      {/* Solid Wall */}
-      <mesh>
+    <RigidBody type="fixed" name={name} position={adjustedPosition} rotation={rotation} colliders={false} ccd={true}>
+      <CuboidCollider args={[100, 6, 0.5]} position={[0, 6, 0]} />
+      {/* Solid Wall - Dark Metallic Carbon Fiber look */}
+      <mesh position={[0, 6, 0]}>
         <boxGeometry args={[200, 12, 1]} />
-        <meshStandardMaterial color="#0a0a25" roughness={0.4} metalness={0.6} />
+        <meshStandardMaterial color="#030306" roughness={0.25} metalness={0.9} />
       </mesh>
       
       {/* Decorative Panels */}
-      <mesh position={[0, 0, 0.51]}>
+      <mesh position={[0, 6, 0.51]}>
         <planeGeometry args={[200, 12]} />
         <meshStandardMaterial 
-          color="#1a1a3a" 
+          color="#0c0c12" 
           transparent 
           opacity={0.3} 
           roughness={0.2}
+          metalness={0.8}
         />
       </mesh>
 
+      {/* Vertical Glowing Conduits (Alternating with Graffiti positions) */}
+      {[-80, -40, 0, 40, 80].map((xOffset) => (
+        <mesh key={xOffset} position={[xOffset, 6, 0.515]}>
+          <cylinderGeometry args={[0.06, 0.06, 12, 8]} />
+          <meshBasicMaterial color="#00f0ff" toneMapped={false} />
+        </mesh>
+      ))}
+
       {/* Graffiti on walls */}
       {graffiti.map((type, i) => (
-        <group key={`${type}-${i}`} position={[(i - (graffiti.length - 1) / 2) * 40 - 20, 0, 0.52]}>
+        <group key={`${type}-${i}`} position={[(i - (graffiti.length - 1) / 2) * 40 - 20, 6, 0.52]}>
           <Graffiti type={type} size={[12, 12, 1]} opacity={0.7} />
         </group>
       ))}
 
       {/* Glowing Base Line */}
-
-
-      <mesh position={[0, -5.5, 0.6]}>
+      <mesh position={[0, 0.25, 0.6]}>
         <planeGeometry args={[200, 0.5]} />
         <meshBasicMaterial color="#ff0055" toneMapped={false} />
       </mesh>
       {/* Glowing Top Line */}
-      <mesh position={[0, 5.5, 0.6]}>
+      <mesh position={[0, 11.75, 0.6]}>
         <planeGeometry args={[200, 0.5]} />
         <meshBasicMaterial color="#39ff14" toneMapped={false} />
       </mesh>

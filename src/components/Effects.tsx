@@ -18,9 +18,35 @@ export function Effects() {
         <Laser key={laser.id} start={laser.start} end={laser.end} color={laser.color} timestamp={laser.timestamp} />
       ))}
       {particles.map(p => (
-        <ParticleBurst key={p.id} position={p.position} color={p.color} />
+        <group key={p.id}>
+          <ParticleBurst position={p.position} color={p.color} />
+          <ImpactRipple position={p.position} color={p.color} />
+        </group>
       ))}
     </>
+  );
+}
+
+function ImpactRipple({ position, color }: { position: [number, number, number], color: string }) {
+  const meshRef = useRef<THREE.Mesh>(null);
+  
+  useFrame((state, delta) => {
+    if (meshRef.current) {
+      // Face the camera
+      meshRef.current.lookAt(state.camera.position);
+      
+      // Expand and fade out
+      const mat = meshRef.current.material as THREE.MeshBasicMaterial;
+      meshRef.current.scale.addScalar(delta * 7.0); // Expansion rate
+      mat.opacity = Math.max(0, mat.opacity - delta * 2.2); // Fades over ~450ms
+    }
+  });
+
+  return (
+    <mesh ref={meshRef} position={position}>
+      <ringGeometry args={[0.08, 0.22, 32]} />
+      <meshBasicMaterial color={color} transparent opacity={1.0} side={THREE.DoubleSide} toneMapped={false} />
+    </mesh>
   );
 }
 

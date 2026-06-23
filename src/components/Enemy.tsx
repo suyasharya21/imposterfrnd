@@ -10,11 +10,11 @@ import * as THREE from 'three';
 import { useGameStore, EnemyData } from '../store';
 import { Text, Float } from '@react-three/drei';
 
-const ENEMY_SPEED = 5.625;
+const ENEMY_SPEED = 7.5;
 const CHASE_DIST = 160;
-const SHOOT_DIST = 25;
-const SHOOT_COOLDOWN = 3000; 
-const AIM_TIME = 800; 
+const SHOOT_DIST = 35;
+const SHOOT_COOLDOWN = 1200; 
+const AIM_TIME = 350; 
 const BOT_FLOAT_HEIGHT = 1.0; 
 
 export function Enemy({ data }: { data: EnemyData }) {
@@ -50,6 +50,7 @@ export function Enemy({ data }: { data: EnemyData }) {
   const stuckTime = useRef(0);
   const muzzleRef = useRef<THREE.Group>(null);
   const lastSyncTime = useRef(0);
+  const detourEndTime = useRef(0);
 
   // Initialize patrol target (start with a point somewhere in the arena)
   useMemo(() => {
@@ -212,8 +213,13 @@ export function Enemy({ data }: { data: EnemyData }) {
       }
     });
 
+    const nowMs = Date.now();
+    const isDetoured = nowMs < detourEndTime.current;
+
     // Decide AI state
-    if (closestTargetPos && hasLineOfSight.current) {
+    if (isDetoured) {
+      state.current = 'patrol'; // Temporarily force patrol towards detour Target
+    } else if (closestTargetPos && hasLineOfSight.current) {
       state.current = 'chase';
     } else if (lastKnownEnemyPos.current) {
       if (currentPos.distanceTo(lastKnownEnemyPos.current) < 3) {
@@ -286,7 +292,7 @@ export function Enemy({ data }: { data: EnemyData }) {
             else laserOrigin.copy(currentPos).add(new THREE.Vector3(0, 1.5, 0));
 
             const targetLookAt = closestTargetPos.clone();
-            const spread = 0.04;
+            const spread = 0.012;
             targetLookAt.x += (Math.random() - 0.5) * spread * closestDist;
             targetLookAt.y += (Math.random() - 0.5) * spread * closestDist;
             targetLookAt.z += (Math.random() - 0.5) * spread * closestDist;
@@ -339,7 +345,7 @@ export function Enemy({ data }: { data: EnemyData }) {
     } else {
       // Patrol
       const now = Date.now();
-      if (currentPos.distanceTo(patrolTarget.current) < 5 || now - lastPatrolChange.current > 8000) {
+      if (!isDetoured && (currentPos.distanceTo(patrolTarget.current) < 5 || now - lastPatrolChange.current > 8000)) {
         patrolTarget.current.set((Math.random() - 0.5) * 180, targetHeight, (Math.random() - 0.5) * 180);
         lastPatrolChange.current = now;
       }
@@ -350,42 +356,56 @@ export function Enemy({ data }: { data: EnemyData }) {
       }
     }
 
-    // Unjamming logic: if significantly stuck, pick a temporary detour
-    if (direction.lengthSq() > 0.1) {
-      if (currentPos.distanceTo(lastPos.current) < 0.005) {
+    const velocity = body.current.linvel();
+
+    // Stuck check / Wall hit reaction
+    if (direction.lengthSq() > 0.01 && !isDetoured) {
+      const horizontalVelocity = new THREE.Vector3(velocity.x, 0, velocity.z);
+      const targetSpeed = state.current === 'chase' ? 11.5 : ENEMY_SPEED;
+      
+      if (horizontalVelocity.length() < 1.0) {
         stuckTime.current += delta;
-        if (stuckTime.current > 1.2) {
-          // Instead of patrol, just shift the current target temporarily or wiggle
-          if (state.current === 'chase') {
-             // Wiggle laterally
-             const wiggle = new THREE.Vector3().crossVectors(direction, new THREE.Vector3(0, 1, 0)).multiplyScalar(5);
-             patrolTarget.current.copy(currentPos).add(wiggle);
-             state.current = 'patrol'; // Short-term patrol to unjam
-             lastPatrolChange.current = Date.now() - 6000; // Force another change soon
-          } else {
-            patrolTarget.current.set(
-              (Math.random() - 0.5) * 180,
-              targetHeight,
-              (Math.random() - 0.5) * 180
-            );
+        if (stuckTime.current > 0.15) { // Stuck for 150ms
+          const testAngles = [Math.PI / 2, -Math.PI / 2, Math.PI / 4, -Math.PI / 4, Math.PI, 0];
+          let bestDir = direction.clone().normalize();
+          let maxClearDist = 0;
+          const rayOrigin = new THREE.Vector3(currentPos.x, currentPos.y + 0.5, currentPos.z);
+          
+          for (const angle of testAngles) {
+            const testDir = direction.clone().normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+            const testRay = new rapier.Ray(rayOrigin, testDir);
+            const testHit = world.castRay(testRay, 18, true, undefined, undefined, undefined, body.current!);
+            
+            const clearDist = testHit ? testHit.timeOfImpact : 18;
+            if (clearDist > maxClearDist) {
+              maxClearDist = clearDist;
+              bestDir = testDir;
+            }
           }
+          
+          // Set new detour target 12 units away in the best direction
+          patrolTarget.current.copy(currentPos).add(bestDir.multiplyScalar(12));
+          detourEndTime.current = Date.now() + 1500; // 1.5 seconds detour
           stuckTime.current = 0;
+          
+          // Instantly face & move towards new detour direction
+          direction.copy(bestDir).normalize();
         }
       } else {
         stuckTime.current = 0;
       }
+    } else {
+      stuckTime.current = 0;
     }
     lastPos.current.copy(currentPos);
-
-    // Apply movement
-    const velocity = body.current.linvel();
+    // Apply Y-axis boundary checking (strictly restrict bots to walking on the floor)
+    let yVel = velocity.y;
     
-    // Improved hover logic
+    // Target hover height calculation
     const heightDiff = targetHeight - pos.y;
-    // Higher restorative force, but very damped to keep it "smooth"
     const hoverForce = heightDiff * 25.0; 
-    const damping = -velocity.y * 3.5;
-    let yVel = velocity.y + (hoverForce + damping) * delta;
+    const damping = -velocity.y * 4.0; // Slightly higher damping for hover stability
+    yVel = velocity.y + (hoverForce + damping) * delta;
 
     // Hard floor collision prevention - soft version
     if (pos.y < 0.2) {
@@ -400,12 +420,27 @@ export function Enemy({ data }: { data: EnemyData }) {
       }
     }
 
-    // Smoothen horizontal movement to prevent "twitching"
+    // Safety cap to prevent bots climbing/floating on top of walls
+    if (pos.y > BOT_FLOAT_HEIGHT + 0.1) {
+      // If moving upward, damp it heavily to prevent floating up
+      if (yVel > 0) {
+        yVel *= 0.1;
+      }
+      // Emergency reset if somehow launched high (above 1.8 units)
+      if (pos.y > 1.8) {
+        body.current.setTranslation({ x: pos.x, y: BOT_FLOAT_HEIGHT, z: pos.z }, true);
+        yVel = 0;
+      }
+    }
+
+    // Smoothen horizontal movement to prevent "twitching" (Frame-rate independent lerp)
     const currentMoveDir = new THREE.Vector3(velocity.x, 0, velocity.z);
-    const targetMoveDir = direction.clone().multiplyScalar(ENEMY_SPEED);
+    const speed = state.current === 'chase' ? 11.5 : ENEMY_SPEED;
+    const targetMoveDir = direction.clone().multiplyScalar(speed);
     
-    // Lerp the move direction for fluidity (higher values = more responsive, lower = smoother)
-    const smoothDir = currentMoveDir.lerp(targetMoveDir, 0.15);
+    // Lerp the move direction for fluidity (scaled by delta for consistency across frame rates)
+    const horizLerpFactor = Math.min(1, 8.5 * delta);
+    const smoothDir = currentMoveDir.lerp(targetMoveDir, horizLerpFactor);
 
     body.current.setLinvel({
       x: smoothDir.x,
@@ -413,15 +448,21 @@ export function Enemy({ data }: { data: EnemyData }) {
       z: smoothDir.z
     }, true);
 
-    // Rotate to face direction
+    // Rotate to face direction (Shortest-path angular rotation with delta-scaled lerp)
     if (groupRef.current && direction.lengthSq() > 0.01) {
       const targetRotationY = Math.atan2(direction.x, direction.z);
-      groupRef.current.rotation.y = THREE.MathUtils.lerp(groupRef.current.rotation.y, targetRotationY, 0.15);
+      const rotLerpFactor = Math.min(1, 8.5 * delta);
+      
+      let diff = targetRotationY - groupRef.current.rotation.y;
+      // Normalize rotation angle difference to [-PI, PI] to take the shortest path
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      groupRef.current.rotation.y += diff * rotLerpFactor;
     }
   });
 
-  const color = data.state === 'disabled' ? '#333' : '#ff0055';
-  const glowColor = data.state === 'disabled' ? '#111' : '#39ff14';
+  const color = data.state === 'disabled' ? '#333' : '#121214';
+  const secondaryColor = data.state === 'disabled' ? '#222' : '#ff3700';
+  const glowColor = data.state === 'disabled' ? '#111' : '#ff9900';
 
   return (
     <RigidBody
@@ -446,13 +487,13 @@ export function Enemy({ data }: { data: EnemyData }) {
             {/* Hover Base */}
             <mesh position={[0, 0.3, 0]} castShadow>
               <cylinderGeometry args={[0.6, 0.4, 0.4, 16]} />
-              <meshStandardMaterial color="#222" metalness={0.9} roughness={0.1} />
+              <meshStandardMaterial color="#2a2a30" metalness={0.95} roughness={0.05} />
             </mesh>
             
             {/* Thruster Glow */}
             <mesh ref={thrusterRef} position={[0, 0.1, 0]}>
               <cylinderGeometry args={[0.5, 0, 0.2, 16]} />
-              <meshBasicMaterial color={glowColor} toneMapped={false} transparent opacity={0.6} />
+              <meshBasicMaterial color={glowColor} toneMapped={false} transparent opacity={0.7} />
             </mesh>
             
             <mesh position={[0, 0.15, 0]}>
@@ -460,31 +501,54 @@ export function Enemy({ data }: { data: EnemyData }) {
               <meshBasicMaterial color={glowColor} toneMapped={false} />
             </mesh>
 
-            {/* Torso with mechanical detail */}
+            {/* Plasma Engine Exhaust Flame */}
+            {data.state === 'active' && (
+              <mesh position={[0, -0.2, 0]} rotation={[Math.PI, 0, 0]}>
+                <coneGeometry args={[0.35, 0.7, 16]} />
+                <meshBasicMaterial color={secondaryColor} toneMapped={false} transparent opacity={0.45} />
+              </mesh>
+            )}
+
+            {/* Torso with mechanical details & glow decals */}
             <mesh position={[0, 1.0, 0]} castShadow>
               <boxGeometry args={[0.8, 0.8, 0.8]} />
-              <meshStandardMaterial color="#111" metalness={0.8} roughness={0.2} />
+              <meshStandardMaterial color={color} metalness={0.9} roughness={0.15} />
+            </mesh>
+            <mesh position={[0, 1.0, 0]}>
+              <boxGeometry args={[0.82, 0.15, 0.82]} />
+              <meshBasicMaterial color={secondaryColor} toneMapped={false} />
             </mesh>
             
             {/* Vents / Panels */}
             <mesh position={[0, 1.0, 0.41]}>
-              <boxGeometry args={[0.5, 0.1, 0.02]} />
-              <meshStandardMaterial color="#333" />
+              <boxGeometry args={[0.5, 0.08, 0.02]} />
+              <meshStandardMaterial color="#08080a" />
             </mesh>
             <mesh position={[0, 0.8, 0.41]}>
-              <boxGeometry args={[0.5, 0.1, 0.02]} />
-              <meshStandardMaterial color="#333" />
+              <boxGeometry args={[0.5, 0.08, 0.02]} />
+              <meshStandardMaterial color="#08080a" />
             </mesh>
 
-            {/* Head */}
+            {/* Head with side armor plates */}
             <group position={[0, 1.7, 0]}>
               <mesh castShadow>
                 <sphereGeometry args={[0.45, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
-                <meshStandardMaterial color={color} metalness={0.7} roughness={0.3} />
+                <meshStandardMaterial color={color} metalness={0.8} roughness={0.2} />
               </mesh>
               <mesh castShadow rotation={[Math.PI, 0, 0]}>
                 <sphereGeometry args={[0.45, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
-                <meshStandardMaterial color="#222" metalness={0.9} />
+                <meshStandardMaterial color="#1a1a20" metalness={0.9} />
+              </mesh>
+              
+              {/* Left Side Armor Plate */}
+              <mesh position={[-0.45, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+                <cylinderGeometry args={[0.2, 0.25, 0.1, 8]} />
+                <meshStandardMaterial color={secondaryColor} metalness={0.95} />
+              </mesh>
+              {/* Right Side Armor Plate */}
+              <mesh position={[0.45, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
+                <cylinderGeometry args={[0.2, 0.25, 0.1, 8]} />
+                <meshStandardMaterial color={secondaryColor} metalness={0.95} />
               </mesh>
               
               {/* Eye Visor */}
@@ -492,12 +556,17 @@ export function Enemy({ data }: { data: EnemyData }) {
                 <boxGeometry args={[0.6, 0.15, 0.1]} />
                 <meshBasicMaterial color={glowColor} toneMapped={false} transparent />
               </mesh>
+              {/* Laser Target Reticle Overlay on Visor */}
+              <mesh position={[0, 0.1, 0.41]} rotation={[0.2, 0, 0]}>
+                <sphereGeometry args={[0.03, 8, 8]} />
+                <meshBasicMaterial color={secondaryColor} toneMapped={false} />
+              </mesh>
               
               {/* Antennae */}
               <group ref={antennaRef} position={[0.25, 0.35, 0]}>
                 <mesh rotation={[0, 0, 0.5]}>
                   <cylinderGeometry args={[0.01, 0.01, 0.6]} />
-                  <meshStandardMaterial color="#222" />
+                  <meshStandardMaterial color="#111" />
                 </mesh>
                 <mesh position={[0, 0.3, 0]}>
                   <sphereGeometry args={[0.04]} />
@@ -524,16 +593,16 @@ export function Enemy({ data }: { data: EnemyData }) {
                   {/* Barrel */}
                   <mesh position={[0, 0, -0.4]} rotation={[Math.PI / 2, 0, 0]} castShadow>
                     <cylinderGeometry args={[0.08, 0.08, 0.8, 8]} />
-                    <meshStandardMaterial color="#111" metalness={0.9} />
+                    <meshStandardMaterial color={color} metalness={0.95} roughness={0.05} />
                   </mesh>
                   {/* Energy Coil */}
                   <mesh position={[0, 0, -0.5]} rotation={[Math.PI / 2, 0, 0]}>
                     <torusGeometry args={[0.09, 0.02, 8, 16]} />
-                    <meshBasicMaterial color={glowColor} toneMapped={false} />
+                    <meshBasicMaterial color={secondaryColor} toneMapped={false} />
                   </mesh>
                   <mesh position={[0, 0, -0.8]} rotation={[Math.PI / 2, 0, 0]}>
                     <cylinderGeometry args={[0.1, 0.1, 0.05, 8]} />
-                    <meshBasicMaterial color={glowColor} toneMapped={false} />
+                    <meshBasicMaterial color={secondaryColor} toneMapped={false} />
                   </mesh>
                   <group ref={muzzleRef} position={[0, 0, -0.9]} />
                 </group>
@@ -552,7 +621,7 @@ export function Enemy({ data }: { data: EnemyData }) {
                   </mesh>
                   <mesh position={[0, 0.1, 0.15]}>
                     <sphereGeometry args={[0.05]} />
-                    <meshBasicMaterial color={glowColor} toneMapped={false} />
+                    <meshBasicMaterial color={secondaryColor} toneMapped={false} />
                   </mesh>
                 </group>
               </group>

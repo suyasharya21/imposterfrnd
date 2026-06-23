@@ -264,7 +264,17 @@ export function Player() {
     const rayDir = { x: 0, y: -1, z: 0 };
     const ray = new rapier.Ray(rayOrigin, rayDir);
     const hit = world.castRay(ray, 0.25, true); // Adjusted to be more precise
-    const isGrounded = hit !== null;
+    
+    let isGrounded = hit !== null;
+    let isStandingOnObstacle = false;
+    
+    if (hit) {
+      const parent = hit.collider.parent();
+      const hitName = (parent?.userData as { name?: string })?.name || '';
+      if (hitName.startsWith('obstacle-') || hitName.startsWith('wall-')) {
+        isStandingOnObstacle = true;
+      }
+    }
 
     // Handle Jump - Just a single hop on press (Keyboard or Mobile)
     const spacePressed = k[' '] || mobileInput.jumping;
@@ -272,8 +282,27 @@ export function Player() {
     lastSpacePressed.current = spacePressed;
 
     let jumpVelocity = velocity.y;
-    if (isGrounded && jumpTriggered) {
-      jumpVelocity = 9.5; // Jump strength (slightly higher for a better "hop" feel)
+    let finalVelocityX = direction.x;
+    let finalVelocityZ = direction.z;
+
+    if (isStandingOnObstacle) {
+      const parent = hit!.collider.parent();
+      if (parent) {
+        const obsPos = parent.translation();
+        const pushDir = new THREE.Vector3(pos.x - obsPos.x, 0, pos.z - obsPos.z).normalize();
+        if (pushDir.lengthSq() < 0.01) {
+          pushDir.set(Math.random() - 0.5, 0, Math.random() - 0.5).normalize();
+        }
+        // Push the player off the wall horizontally
+        finalVelocityX = pushDir.x * 15;
+        finalVelocityZ = pushDir.z * 15;
+        jumpVelocity = -3; // Push down
+        isGrounded = false; // Disable jumping while sliding off
+      }
+    } else {
+      if (isGrounded && jumpTriggered) {
+        jumpVelocity = 9.5; // Jump strength
+      }
     }
 
     // Safety check: falling through floor or too high
@@ -283,7 +312,7 @@ export function Player() {
       useGameStore.getState().addEvent('Recovered from floor-glitch');
     }
 
-    body.current.setLinvel({ x: direction.x, y: jumpVelocity, z: direction.z }, true);
+    body.current.setLinvel({ x: finalVelocityX, y: jumpVelocity, z: finalVelocityZ }, true);
 
     // Mobile Look Rotation
     if (Math.abs(mobileInput.look.x) > 0.01 || Math.abs(mobileInput.look.y) > 0.01) {

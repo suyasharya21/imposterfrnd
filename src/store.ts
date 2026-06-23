@@ -9,7 +9,7 @@ import { io, Socket } from 'socket.io-client';
 import { sounds } from './lib/sounds';
 import { mulberry32 } from './constants';
 
-export type GameState = 'menu' | 'waiting' | 'playing' | 'gameover';
+export type GameState = 'menu' | 'waiting' | 'playing' | 'gameover' | 'victory';
 export type EntityState = 'active' | 'disabled';
 
 export type WeaponType = 'gun' | 'knife' | 'pistol';
@@ -565,6 +565,27 @@ export const useGameStore = create<GameStore>((set, get) => ({
       position: [enemyPos![0] + offsetX, 1.2, enemyPos![2] + offsetZ],
       collected: false
     });
+
+    // Check if all bots are killed in CPU mode
+    const isCpuMode = state.gameMode === 'cpu';
+    const allBotsDead = isCpuMode && enemies.every(e => e.state === 'disabled');
+
+    if (allBotsDead) {
+      if (state.timerInterval) {
+        clearInterval(state.timerInterval);
+      }
+      return {
+        enemies,
+        coins: newCoins,
+        gameState: 'victory',
+        timerInterval: null,
+        events: [...state.events, { 
+          id: Math.random().toString(), 
+          message: `VICTORY! All bots eliminated.`, 
+          timestamp: Date.now() 
+        }]
+      };
+    }
 
     return {
       enemies,

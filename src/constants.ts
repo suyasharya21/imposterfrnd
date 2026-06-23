@@ -78,7 +78,7 @@ export const getObstacles = (_isMobile: boolean, seed: number = 12345): Obstacle
       if (!collision) {
         const color = rng() > 0.5 ? '#39ff14' : '#ff0055';
         let graffitiType: typeof graffitiTypes[number] | undefined;
-        if (type === 'box' && (width > 5 || depth > 5) && rng() > 0.4) {
+        if (type === 'box' && (width > 5 || depth > 5) && rng() > 0.15) {
           graffitiType = graffitiTypes[Math.floor(rng() * graffitiTypes.length)];
         }
 
