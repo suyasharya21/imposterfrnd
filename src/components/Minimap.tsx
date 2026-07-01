@@ -6,7 +6,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useGameStore } from '../store';
 import { motion } from 'motion/react';
-import { getObstacles, ARENA_HALF_SIZE, ARENA_SIZE } from '../constants';
+import { getObstacles } from '../constants';
 
 const MAP_SIZE = 150;
 
@@ -17,24 +17,28 @@ export function Minimap() {
   const enemies = useGameStore(state => state.enemies);
   const coins = useGameStore(state => state.coins);
   const arenaSeed = useGameStore(state => state.arenaSeed);
+  const levelConfig = useGameStore(state => state.levelConfig);
   
   const [isMobile] = useState(() => {
     if (typeof window === 'undefined') return false;
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
   });
 
-  const obstacles = useMemo(() => getObstacles(isMobile, arenaSeed), [isMobile, arenaSeed]);
+  const obstacles = useMemo(() => getObstacles(isMobile, arenaSeed, levelConfig), [isMobile, arenaSeed, levelConfig]);
   const activeEnemies = useMemo(() => enemies.filter(e => e.state === 'active'), [enemies]);
 
+  const arenaSize = levelConfig.arenaSize;
+  const arenaHalfSize = arenaSize / 2;
+
   const ZOOM = 1.2; 
-  const pixelsPerUnit = (MAP_SIZE / ARENA_SIZE) * ZOOM;
+  const pixelsPerUnit = (MAP_SIZE / arenaSize) * ZOOM;
 
   const boundaryWalls = useMemo(() => [
-    { name: 'wall-n', position: [0, 0, -100] as [number, number, number], size: [200, 12, 1] as [number, number, number], rotation: [0, 0, 0] as [number, number, number], color: '#39ff14' },
-    { name: 'wall-s', position: [0, 0, 100] as [number, number, number], size: [200, 12, 1] as [number, number, number], rotation: [0, Math.PI, 0] as [number, number, number], color: '#ff0055' },
-    { name: 'wall-e', position: [100, 0, 0] as [number, number, number], size: [200, 12, 1] as [number, number, number], rotation: [0, -Math.PI / 2, 0] as [number, number, number], color: '#00f0ff' },
-    { name: 'wall-w', position: [-100, 0, 0] as [number, number, number], size: [200, 12, 1] as [number, number, number], rotation: [0, Math.PI / 2, 0] as [number, number, number], color: '#ffff00' }
-  ], []);
+    { name: 'wall-n', position: [0, 0, -arenaHalfSize] as [number, number, number], size: [arenaSize, 12, 1] as [number, number, number], rotation: [0, 0, 0] as [number, number, number], color: '#39ff14' },
+    { name: 'wall-s', position: [0, 0, arenaHalfSize] as [number, number, number], size: [arenaSize, 12, 1] as [number, number, number], rotation: [0, Math.PI, 0] as [number, number, number], color: '#ff0055' },
+    { name: 'wall-e', position: [arenaHalfSize, 0, 0] as [number, number, number], size: [arenaSize, 12, 1] as [number, number, number], rotation: [0, -Math.PI / 2, 0] as [number, number, number], color: '#00f0ff' },
+    { name: 'wall-w', position: [-arenaHalfSize, 0, 0] as [number, number, number], size: [arenaSize, 12, 1] as [number, number, number], rotation: [0, Math.PI / 2, 0] as [number, number, number], color: '#ffff00' }
+  ], [arenaSize, arenaHalfSize]);
 
   // Rotation for the Map (Player's forward is always UP)
   const mapRotationDeg = (playerRotation * 180) / Math.PI;
@@ -85,10 +89,10 @@ export function Minimap() {
           <div 
             className="absolute border-2 border-lime-400/30 pointer-events-none z-0"
             style={{
-              left: ( -ARENA_HALF_SIZE ) * pixelsPerUnit + (MAP_SIZE / 2),
-              top: ( -ARENA_HALF_SIZE ) * pixelsPerUnit + (MAP_SIZE / 2),
-              width: ARENA_SIZE * pixelsPerUnit,
-              height: ARENA_SIZE * pixelsPerUnit,
+              left: ( -arenaHalfSize ) * pixelsPerUnit + (MAP_SIZE / 2),
+              top: ( -arenaHalfSize ) * pixelsPerUnit + (MAP_SIZE / 2),
+              width: arenaSize * pixelsPerUnit,
+              height: arenaSize * pixelsPerUnit,
               backgroundImage: `
                 radial-gradient(circle, transparent 60%, rgba(163,230,53,0.05) 100%),
                 linear-gradient(to right, rgba(163, 230, 53, 0.08) 1px, transparent 1px),
@@ -144,29 +148,13 @@ export function Minimap() {
             );
           })}
 
-        {/* Coins (Gold Dots) */}
-        {coins.map(coin => {
-          const { x, z } = getMapCoords(coin.position);
-          return (
-            <div 
-              key={coin.id}
-              className="absolute w-1.5 h-1.5 bg-yellow-400 rounded-full z-[8]"
-              style={{ 
-                left: `${x + MAP_SIZE / 2}px`, 
-                top: `${z + MAP_SIZE / 2}px`,
-                transform: 'translate(-50%, -50%)'
-              }}
-            />
-          );
-        })}
-
         {/* Enemies (Bots - Red Dots) */}
         {activeEnemies.map(enemy => {
           const { x, z } = getMapCoords(enemy.position);
           return (
             <div 
               key={enemy.id}
-              className="absolute w-2.5 h-2.5 rounded-full z-[10] bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)] animate-pulse"
+              className="absolute w-2.5 h-2.5 rounded-full z-[10] bg-[#ff0000] shadow-[0_0_10px_#ff0000] animate-pulse"
               style={{ 
                 left: `${x + MAP_SIZE / 2}px`, 
                 top: `${z + MAP_SIZE / 2}px`,
@@ -176,14 +164,14 @@ export function Minimap() {
           );
         })}
 
-        {/* Other Players (Humans - Green Dots as requested) */}
+        {/* Other Players (Humans - Neon Green Dots) */}
         {Object.values(otherPlayers).map(player => {
           if (player.state === 'disabled') return null;
           const { x, z } = getMapCoords(player.position);
           return (
             <div 
               key={player.id}
-              className="absolute w-2.5 h-2.5 bg-lime-400 rounded-full shadow-[0_0_8px_rgba(163,230,53,0.8)] z-[15]"
+              className="absolute w-2.5 h-2.5 bg-[#39ff14] rounded-full shadow-[0_0_10px_#39ff14] z-[15]"
               style={{ 
                 left: `${x + MAP_SIZE / 2}px`, 
                 top: `${z + MAP_SIZE / 2}px`,

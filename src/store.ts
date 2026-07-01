@@ -7,7 +7,16 @@ import { create } from 'zustand';
 import * as THREE from 'three';
 import { io, Socket } from 'socket.io-client';
 import { sounds } from './lib/sounds';
-import { mulberry32 } from './constants';
+import { mulberry32, LevelConfig, LEVELS, getObstacles, ObstacleData } from './constants';
+
+const defaultMultiplayerConfig: LevelConfig = {
+  level: 3,
+  arenaSize: 200,
+  obstacleCount: 120,
+  botCount: 8,
+  timeLimit: 150,
+  title: "Multiplayer Arena"
+};
 
 export type GameState = 'menu' | 'waiting' | 'playing' | 'gameover' | 'victory';
 export type EntityState = 'active' | 'disabled';
@@ -73,6 +82,14 @@ interface GameStore {
   events: GameEvent[];
   coins: CoinData[];
   
+  // Level progression
+  currentLevel: number;
+  levelConfig: LevelConfig;
+  nextLevel: () => void;
+
+  // Client position override
+  playerPositionOverride: [number, number, number] | null;
+  
   // Multiplayer
   socket: Socket | null;
   roomCode: string | null;
@@ -87,6 +104,7 @@ interface GameStore {
   isCursorLocked: boolean;
   isConnecting: boolean;
   error: string | null;
+  playerColor: string;
 
   timerInterval: NodeJS.Timeout | null;
   startGame: (mode: 'online' | 'cpu' | 'room', code?: string) => void;
@@ -128,6 +146,44 @@ interface GameStore {
   }>) => void;
 }
 
+function isPositionColliding(px: number, pz: number, obstacles: ObstacleData[], bufferRadius = 1.8): boolean {
+  for (const obs of obstacles) {
+    const cx = obs.position[0];
+    const cz = obs.position[2];
+
+    if (obs.type === 'cylinder') {
+      const radius = obs.size[0] / 2;
+      const dx = px - cx;
+      const dz = pz - cz;
+      if (dx * dx + dz * dz <= (radius + bufferRadius) * (radius + bufferRadius)) {
+        return true;
+      }
+    } else if (obs.type === 'box') {
+      const width = obs.size[0];
+      const depth = obs.size[2];
+      const rotY = obs.rotation[1];
+
+      // Translate to box relative space
+      const dx = px - cx;
+      const dz = pz - cz;
+
+      // Rotate back by -rotY
+      const cosT = Math.cos(-rotY);
+      const sinT = Math.sin(-rotY);
+      const rx = dx * cosT - dz * sinT;
+      const rz = dx * sinT + dz * cosT;
+
+      const halfX = width / 2;
+      const halfZ = depth / 2;
+
+      if (Math.abs(rx) <= halfX + bufferRadius && Math.abs(rz) <= halfZ + bufferRadius) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 const INITIAL_ENEMIES: EnemyData[] = [
   { id: 'bot-1', position: [40, 1, 40], state: 'active', disabledUntil: 0, score: 0, health: 2 },
   { id: 'bot-2', position: [-40, 1, 40], state: 'active', disabledUntil: 0, score: 0, health: 2 },
@@ -151,6 +207,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   events: [],
   coins: [],
   
+  currentLevel: 1,
+  levelConfig: LEVELS[0],
+  playerPositionOverride: null,
+  
   socket: null,
   roomCode: null,
   gameMode: null,
@@ -165,6 +225,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   isConnecting: false,
   error: null,
   timerInterval: null,
+  playerColor: '#39ff14',
 
   mobileInput: {
     move: { x: 0, y: 0 },
@@ -191,14 +252,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ error: null, isConnecting: true });
 
     if (mode === 'cpu') {
+      const { currentLevel } = get();
+      const config = LEVELS[currentLevel - 1] || LEVELS[0];
       const arenaSeed = Math.floor(Math.random() * 1000000);
       const rng = mulberry32(arenaSeed + 1);
-      const enemies: EnemyData[] = Array.from({ length: 16 }).map((_, i) => {
+      const obstacles = getObstacles(false, arenaSeed, config);
+      const enemies: EnemyData[] = Array.from({ length: config.botCount }).map((_, i) => {
         let x, z;
+        const spawnRadius = (config.arenaSize / 2) - 15;
+        let attempts = 0;
         do {
-          x = (rng() - 0.5) * 170;
-          z = (rng() - 0.5) * 170;
-        } while (Math.abs(x) < 20 && Math.abs(z) < 20);
+          x = (rng() - 0.5) * spawnRadius * 2;
+          z = (rng() - 0.5) * spawnRadius * 2;
+          attempts++;
+        } while ((Math.abs(x) < 20 && Math.abs(z) < 20 || isPositionColliding(x, z, obstacles)) && attempts < 100);
         
         return {
           id: `bot-${i + 1}`,
@@ -210,9 +277,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
         };
       });
 
-      const coins: CoinData[] = Array.from({ length: 25 }).map((_, i) => ({
+      const coins: CoinData[] = Array.from({ length: Math.floor(config.arenaSize * 0.15) }).map((_, i) => ({
         id: `coin-init-${i}`,
-        position: [(rng() - 0.5) * 180, 1.2, (rng() - 0.5) * 180],
+        position: [(rng() - 0.5) * (config.arenaSize - 10), 1.2, (rng() - 0.5) * (config.arenaSize - 10)],
         collected: false
       }));
 
@@ -220,15 +287,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
         gameState: 'playing',
         gameMode: 'cpu',
         isConnecting: false,
-        roomCode: 'OFFLINE_OPS',
-        timeLeft: 300,
-        score: 0,
+        roomCode: `LVL-${config.level}`,
+        timeLeft: config.timeLimit,
+        score: get().score,
         arenaSeed,
         enemies,
         coins,
-        lives: 5,
-        ammo: { gun: 100, pistol: 100, knife: Infinity },
+        lives: Math.max(5, get().lives),
+        ammo: { 
+          gun: get().ammo.gun + 50, 
+          pistol: get().ammo.pistol + 50, 
+          knife: Infinity 
+        },
         otherPlayers: {},
+        levelConfig: config,
         timerInterval: setInterval(() => {
           get().updateTime(1);
         }, 1000)
@@ -259,13 +331,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const otherPlayers = { ...players };
       delete otherPlayers[newSocket!.id!];
       
+      const myPlayerData = players[newSocket!.id!];
+      const playerColor = myPlayerData ? myPlayerData.color : '#39ff14';
+      
       const rng = mulberry32(arenaSeed + 1);
+      const obstacles = getObstacles(false, arenaSeed, defaultMultiplayerConfig);
       const enemies: EnemyData[] = Array.from({ length: 8 }).map((_, i) => {
         let x, z;
+        let attempts = 0;
         do {
           x = (rng() - 0.5) * 160;
           z = (rng() - 0.5) * 160;
-        } while (Math.abs(x) < 20 && Math.abs(z) < 20);
+          attempts++;
+        } while ((Math.abs(x) < 20 && Math.abs(z) < 20 || isPositionColliding(x, z, obstacles)) && attempts < 100);
         
         return {
           id: `bot-${i + 1}`,
@@ -288,7 +366,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
         arenaSeed,
         enemies,
         lives: 3,
-        ammo: { gun: 30, pistol: 20, knife: Infinity }
+        ammo: { gun: 30, pistol: 20, knife: Infinity },
+        levelConfig: defaultMultiplayerConfig,
+        playerColor
       });
 
       if (status === 'playing') {
@@ -303,7 +383,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     newSocket.on('roomUpdate', ({ players, status }: { players: Record<string, PlayerData>, status: 'waiting' | 'playing' }) => {
       const otherPlayers = { ...players };
       delete otherPlayers[newSocket!.id!];
-      set({ otherPlayers });
+      const myPlayerData = players[newSocket!.id!];
+      const playerColor = myPlayerData ? myPlayerData.color : '#39ff14';
+      set({ otherPlayers, playerColor });
     });
 
     newSocket.on('gameStart', () => {
@@ -428,7 +510,26 @@ export const useGameStore = create<GameStore>((set, get) => ({
           };
         });
       });
+
+      newSocket.on('forcePosition', ({ position }: { position: [number, number, number] }) => {
+        set({ 
+          playerPosition: position,
+          playerPositionOverride: position 
+        });
+      });
     set({ socket: newSocket });
+  },
+
+  nextLevel: () => {
+    const { currentLevel } = get();
+    const nextLvl = currentLevel + 1;
+    const config = LEVELS[nextLvl - 1];
+    if (config) {
+      set({ currentLevel: nextLvl, levelConfig: config });
+      get().startGame('cpu');
+    } else {
+      get().leaveGame();
+    }
   },
 
   createRoom: () => get().startGame('room'),
@@ -468,7 +569,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       timeLeft: 150,
       playerState: 'active',
       lives: 3,
+      currentLevel: 1,
+      levelConfig: LEVELS[0],
+      playerPositionOverride: null,
       ammo: { gun: 30, pistol: 20, knife: Infinity },
+      playerColor: '#39ff14',
     });
   },
 

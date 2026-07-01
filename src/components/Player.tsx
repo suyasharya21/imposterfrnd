@@ -6,7 +6,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { RigidBody, RapierRigidBody, useRapier, CapsuleCollider } from '@react-three/rapier';
-import { PointerLockControls } from '@react-three/drei';
+import { PointerLockControls, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { useGameStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
@@ -52,7 +52,11 @@ export function Player() {
     currentWeapon,
     cycleWeapon,
     useAmmo,
-    addEvent
+    addEvent,
+    playerPositionOverride,
+    playerColor,
+    ammo,
+    lives
   } = useGameStore(useShallow(state => ({
     playerState: state.playerState,
     gameState: state.gameState,
@@ -65,7 +69,11 @@ export function Player() {
     currentWeapon: state.currentWeapon,
     cycleWeapon: state.cycleWeapon,
     useAmmo: state.useAmmo,
-    addEvent: state.addEvent
+    addEvent: state.addEvent,
+    playerPositionOverride: state.playerPositionOverride,
+    playerColor: state.playerColor,
+    ammo: state.ammo,
+    lives: state.lives
   })));
 
   const keys = useRef({ 
@@ -80,6 +88,8 @@ export function Player() {
   const gunGroupRef = useRef<THREE.Group>(null);
   const gunVisualRef = useRef<THREE.Group>(null);
   const gunBarrelRef = useRef<THREE.Group>(null);
+  const muzzleFlashRef = useRef<THREE.Group>(null);
+  const knifeTrailRef = useRef<THREE.Mesh>(null);
 
   // More robust mobile detection (checks for touch support)
   const isTouchDevice = useRef(false);
@@ -117,7 +127,7 @@ export function Player() {
     // Set weapon parameters
     let range = MAX_LASER_DIST;
     let cooldown = 200;
-    let particleColor = '#39ff14';
+    let particleColor = playerColor;
     let damage = 2; // Gun takes 1 shot (HP=2)
 
     // Check for ammo before proceeding
@@ -130,21 +140,17 @@ export function Player() {
     if (currentWeapon === 'knife') {
       range = 3.5;
       cooldown = 400;
-      particleColor = '#ff0055';
       damage = 1; // Knife takes 2 hits
       
       // Trigger swing animation
       if (gunVisualRef.current) {
         const visual = gunVisualRef.current;
-        // Simple kick/swing animation using a temporary offset or rotation
-        // We'll use a local variable to trigger a frame effect
         visual.rotation.z += 0.5;
         visual.position.z -= 0.2;
       }
     } else if (currentWeapon === 'pistol') {
       range = 60;
       cooldown = 400;
-      particleColor = '#39ff14';
       damage = 1; // Pistol takes 2 shots
     }
 
@@ -152,6 +158,18 @@ export function Player() {
     const now = Date.now();
     if (now - lastShootTime.current < cooldown) return;
     lastShootTime.current = now;
+
+    // Trigger muzzle flash / knife trail scale
+    if (currentWeapon === 'knife') {
+      if (knifeTrailRef.current) {
+        knifeTrailRef.current.scale.set(1.2, 1.2, 1.2);
+      }
+    } else {
+      if (muzzleFlashRef.current) {
+        muzzleFlashRef.current.scale.set(1.5, 1.5, 1.5);
+        muzzleFlashRef.current.rotation.z = Math.random() * Math.PI;
+      }
+    }
 
     // Raycast from camera
     const raycaster = new THREE.Raycaster();
@@ -218,6 +236,32 @@ export function Player() {
 
   useFrame((_, delta) => {
     if (!body.current || gameState !== 'playing') return;
+
+    // Decay muzzle flash scale
+    if (muzzleFlashRef.current) {
+      muzzleFlashRef.current.scale.x = THREE.MathUtils.lerp(muzzleFlashRef.current.scale.x, 0, delta * 25);
+      muzzleFlashRef.current.scale.y = THREE.MathUtils.lerp(muzzleFlashRef.current.scale.y, 0, delta * 25);
+      muzzleFlashRef.current.scale.z = THREE.MathUtils.lerp(muzzleFlashRef.current.scale.z, 0, delta * 25);
+    }
+
+    // Decay knife trail scale
+    if (knifeTrailRef.current) {
+      knifeTrailRef.current.scale.x = THREE.MathUtils.lerp(knifeTrailRef.current.scale.x, 0, delta * 12);
+      knifeTrailRef.current.scale.y = THREE.MathUtils.lerp(knifeTrailRef.current.scale.y, 0, delta * 12);
+      knifeTrailRef.current.scale.z = THREE.MathUtils.lerp(knifeTrailRef.current.scale.z, 0, delta * 12);
+    }
+
+    // Check for server-forced position override (anti-cheat)
+    if (playerPositionOverride) {
+      body.current.setTranslation({
+        x: playerPositionOverride[0],
+        y: playerPositionOverride[1],
+        z: playerPositionOverride[2]
+      }, true);
+      body.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      useGameStore.setState({ playerPositionOverride: null });
+      return;
+    }
 
     const now = Date.now();
     const pCamera = camera as THREE.PerspectiveCamera;
@@ -414,6 +458,23 @@ export function Player() {
     lastPlayerState.current = playerState;
   }, [playerState, camera]);
 
+  // Handle random spawn at start of game
+  const spawnedRef = useRef(false);
+  useEffect(() => {
+    if (!spawnedRef.current && body.current && gameState === 'playing') {
+      spawnedRef.current = true;
+      const size = useGameStore.getState().levelConfig?.arenaSize || 100;
+      const spawnRadius = (size / 2) - 15;
+      const x = (Math.random() - 0.5) * spawnRadius * 2;
+      const z = (Math.random() - 0.5) * spawnRadius * 2;
+      
+      body.current.setTranslation({ x, y: 2, z }, true);
+      body.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      camera.position.set(x, 4, z);
+      updatePlayerPosition([x, 0, z], camera.rotation.y);
+    }
+  }, [gameState, updatePlayerPosition, camera]);
+
   const [showGun, setShowGun] = useState(true);
   const isZoomedRef = useRef(false);
   const [isZoomed, setIsZoomed] = useState(false);
@@ -518,7 +579,7 @@ export function Player() {
                 </mesh>
                 <mesh position={[0, -0.08, 0.15]}>
                   <boxGeometry args={[0.09, 0.05, 0.1]} />
-                  <meshBasicMaterial color="#39ff14" toneMapped={false} />
+                  <meshBasicMaterial color={playerColor} toneMapped={false} />
                 </mesh>
                 
                 {/* Sight / Scope */}
@@ -529,7 +590,7 @@ export function Player() {
                   </mesh>
                   <mesh position={[0, 0.01, -0.05]} rotation={[Math.PI / 2, 0, 0]}>
                     <ringGeometry args={[0.015, 0.02, 16]} />
-                    <meshBasicMaterial color="#39ff14" toneMapped={false} />
+                    <meshBasicMaterial color={playerColor} toneMapped={false} />
                   </mesh>
                 </group>
 
@@ -540,119 +601,329 @@ export function Player() {
                 </mesh>
                 <mesh position={[0, 0.04, -0.15]} rotation={[Math.PI / 2, 0, 0]}>
                   <cylinderGeometry args={[0.04, 0.04, 0.02, 12]} />
-                  <meshBasicMaterial color="#39ff14" toneMapped={false} />
+                  <meshBasicMaterial color={playerColor} toneMapped={false} />
                 </mesh>
                 <mesh position={[0, 0.04, -0.25]} rotation={[Math.PI / 2, 0, 0]}>
                   <cylinderGeometry args={[0.04, 0.04, 0.02, 12]} />
-                  <meshBasicMaterial color="#39ff14" toneMapped={false} />
+                  <meshBasicMaterial color={playerColor} toneMapped={false} />
                 </mesh>
 
                 {/* Neon accents along body */}
                 <mesh position={[0.055, 0, 0.2]}>
                   <boxGeometry args={[0.01, 0.08, 0.3]} />
-                  <meshBasicMaterial color="#39ff14" toneMapped={false} />
+                  <meshBasicMaterial color={playerColor} toneMapped={false} />
                 </mesh>
                 <mesh position={[-0.055, 0, 0.2]}>
                   <boxGeometry args={[0.01, 0.08, 0.3]} />
-                  <meshBasicMaterial color="#39ff14" toneMapped={false} />
+                  <meshBasicMaterial color={playerColor} toneMapped={false} />
                 </mesh>
                 
+                {/* Holographic HUD Screen */}
+                <group position={[-0.08, 0.08, 0.1]} rotation={[0, 0.15, 0]}>
+                  <mesh>
+                    <boxGeometry args={[0.01, 0.08, 0.12]} />
+                    <meshBasicMaterial color={playerColor} transparent opacity={0.15} toneMapped={false} />
+                  </mesh>
+                  <mesh>
+                    <boxGeometry args={[0.01, 0.08, 0.12]} />
+                    <meshBasicMaterial color={playerColor} wireframe toneMapped={false} />
+                  </mesh>
+                  <Text
+                    position={[-0.01, 0.01, 0]}
+                    rotation={[0, -Math.PI / 2, 0]}
+                    fontSize={0.015}
+                    color={playerColor}
+                    anchorX="center"
+                    anchorY="middle"
+                  >
+                    {`AMMO: ${ammo.gun}`}
+                  </Text>
+                  <Text
+                    position={[-0.01, -0.015, 0]}
+                    rotation={[0, -Math.PI / 2, 0]}
+                    fontSize={0.01}
+                    color={playerColor}
+                    anchorX="center"
+                    anchorY="middle"
+                  >
+                    {`LIVES: ${lives}`}
+                  </Text>
+                </group>
+
+                {/* Holographic Laser Guide Line */}
+                <mesh position={[0, 0.04, -10]} rotation={[Math.PI / 2, 0, 0]}>
+                  <cylinderGeometry args={[0.002, 0.002, 20]} />
+                  <meshBasicMaterial color={playerColor} transparent opacity={0.15} toneMapped={false} />
+                </mesh>
+
+                {/* Muzzle Flash group */}
+                <group ref={muzzleFlashRef} scale={[0, 0, 0]} position={[0, 0.04, -0.32]}>
+                  <mesh rotation={[Math.PI / 2, 0, 0]}>
+                    <coneGeometry args={[0.05, 0.18, 6]} />
+                    <meshBasicMaterial color={playerColor} transparent opacity={0.8} toneMapped={false} />
+                  </mesh>
+                  <mesh>
+                    <sphereGeometry args={[0.04, 8, 8]} />
+                    <meshBasicMaterial color="#ffffff" transparent opacity={0.9} toneMapped={false} />
+                  </mesh>
+                </group>
+
+                {/* Right Cyber-Arm (Forearm & Glove) */}
+                <group position={[0.1, -0.22, 0.35]} rotation={[-Math.PI / 8, -Math.PI / 12, 0]}>
+                  <mesh castShadow>
+                    <boxGeometry args={[0.07, 0.07, 0.35]} />
+                    <meshStandardMaterial color="#2d2d2d" metalness={0.8} roughness={0.2} />
+                  </mesh>
+                  <mesh position={[0.036, 0, 0]}>
+                    <boxGeometry args={[0.005, 0.04, 0.25]} />
+                    <meshBasicMaterial color={playerColor} toneMapped={false} />
+                  </mesh>
+                  <mesh position={[0, 0, -0.19]}>
+                    <sphereGeometry args={[0.03, 8, 8]} />
+                    <meshStandardMaterial color="#1a1a1a" />
+                  </mesh>
+                  <mesh position={[-0.03, 0.02, -0.23]} rotation={[0, 0.2, 0]}>
+                    <boxGeometry args={[0.05, 0.05, 0.07]} />
+                    <meshStandardMaterial color="#111111" metalness={0.3} roughness={0.8} />
+                  </mesh>
+                </group>
+
+                {/* Left Cyber-Arm (Supporting barrel) */}
+                <group position={[-0.15, -0.2, 0.1]} rotation={[Math.PI / 8, Math.PI / 6, -Math.PI / 12]}>
+                  <mesh castShadow>
+                    <boxGeometry args={[0.07, 0.07, 0.3]} />
+                    <meshStandardMaterial color="#2d2d2d" metalness={0.8} roughness={0.2} />
+                  </mesh>
+                  <mesh position={[-0.036, 0, 0]}>
+                    <boxGeometry args={[0.005, 0.04, 0.2]} />
+                    <meshBasicMaterial color={playerColor} toneMapped={false} />
+                  </mesh>
+                  <mesh position={[0.05, 0.08, -0.18]} rotation={[0, -0.1, 0.2]}>
+                    <boxGeometry args={[0.05, 0.05, 0.07]} />
+                    <meshStandardMaterial color="#111111" metalness={0.3} roughness={0.8} />
+                  </mesh>
+                </group>
+
                 <group ref={gunBarrelRef} position={[0, 0.04, -0.32]} />
               </>
             )}
 
             {currentWeapon === 'knife' && (
-              <group rotation={[Math.PI / 2.5, 0, 0]} position={[0, -0.1, 0.1]}>
-                {/* Handle / Guard */}
-                <mesh position={[0, -0.18, 0]}>
-                  <boxGeometry args={[0.05, 0.15, 0.05]} />
-                  <meshStandardMaterial color="#111" />
-                </mesh>
-                <mesh position={[0, -0.1, 0]}>
-                  <boxGeometry args={[0.12, 0.02, 0.06]} />
-                  <meshStandardMaterial color="#222" />
-                </mesh>
-                
-                {/* Power Cell in handle */}
-                <mesh position={[0, -0.18, 0]}>
-                  <boxGeometry args={[0.055, 0.05, 0.055]} />
-                  <meshBasicMaterial color="#ff0055" toneMapped={false} />
-                </mesh>
+              <>
+                <group rotation={[Math.PI / 2.5, 0, 0]} position={[0, -0.1, 0.1]}>
+                  {/* Handle / Guard */}
+                  <mesh position={[0, -0.18, 0]}>
+                    <boxGeometry args={[0.05, 0.15, 0.05]} />
+                    <meshStandardMaterial color="#111" />
+                  </mesh>
+                  <mesh position={[0, -0.1, 0]}>
+                    <boxGeometry args={[0.12, 0.02, 0.06]} />
+                    <meshStandardMaterial color="#222" />
+                  </mesh>
+                  
+                  {/* Power Cell in handle */}
+                  <mesh position={[0, -0.18, 0]}>
+                    <boxGeometry args={[0.055, 0.05, 0.055]} />
+                    <meshBasicMaterial color={playerColor} toneMapped={false} />
+                  </mesh>
 
-                {/* Blade - futuristic geometry */}
-                <mesh position={[0, 0.1, 0]}>
-                  <boxGeometry args={[0.01, 0.35, 0.08]} />
-                  <meshStandardMaterial color="#222" metalness={0.9} roughness={0.1} />
-                </mesh>
-                
-                {/* Glowing Core Edge */}
-                <mesh position={[0, 0.12, 0.03]}>
-                  <boxGeometry args={[0.015, 0.3, 0.02]} />
-                  <meshBasicMaterial color="#ff0055" toneMapped={false} opacity={0.8} transparent />
-                </mesh>
-                
-                {/* Laser Edge */}
-                <mesh position={[0, 0.12, -0.04]} rotation={[0, 0, 0]}>
-                  <boxGeometry args={[0.005, 0.32, 0.01]} />
-                  <meshBasicMaterial color="#ff0055" toneMapped={false} />
-                </mesh>
+                  {/* Blade - futuristic geometry */}
+                  <mesh position={[0, 0.1, 0]}>
+                    <boxGeometry args={[0.01, 0.35, 0.08]} />
+                    <meshStandardMaterial color="#222" metalness={0.9} roughness={0.1} />
+                  </mesh>
+                  
+                  {/* Glowing Core Edge */}
+                  <mesh position={[0, 0.12, 0.03]}>
+                    <boxGeometry args={[0.015, 0.3, 0.02]} />
+                    <meshBasicMaterial color={playerColor} toneMapped={false} opacity={0.8} transparent />
+                  </mesh>
+                  
+                  {/* Laser Edge */}
+                  <mesh position={[0, 0.12, -0.04]} rotation={[0, 0, 0]}>
+                    <boxGeometry args={[0.005, 0.32, 0.01]} />
+                    <meshBasicMaterial color={playerColor} toneMapped={false} />
+                  </mesh>
 
-                {/* Cross-guard lights */}
-                <mesh position={[0.05, -0.1, 0]}>
-                  <sphereGeometry args={[0.01, 8, 8]} />
-                  <meshBasicMaterial color="#ff0055" toneMapped={false} />
-                </mesh>
-                <mesh position={[-0.05, -0.1, 0]}>
-                  <sphereGeometry args={[0.01, 8, 8]} />
-                  <meshBasicMaterial color="#ff0055" toneMapped={false} />
-                </mesh>
+                  {/* Cross-guard lights */}
+                  <mesh position={[0.05, -0.1, 0]}>
+                    <sphereGeometry args={[0.01, 8, 8]} />
+                    <meshBasicMaterial color={playerColor} toneMapped={false} />
+                  </mesh>
+                  <mesh position={[-0.05, -0.1, 0]}>
+                    <sphereGeometry args={[0.01, 8, 8]} />
+                    <meshBasicMaterial color={playerColor} toneMapped={false} />
+                  </mesh>
 
-                <group ref={gunBarrelRef} position={[0, 0.3, 0]} />
-              </group>
+                  {/* Slash Trail mesh */}
+                  <mesh ref={knifeTrailRef} scale={[0, 0, 0]} position={[0, 0.1, -0.1]} rotation={[0, 0, 0]}>
+                    <torusGeometry args={[0.25, 0.02, 8, 24, Math.PI / 1.5]} />
+                    <meshBasicMaterial color={playerColor} transparent opacity={0.6} toneMapped={false} />
+                  </mesh>
+
+                  <group ref={gunBarrelRef} position={[0, 0.3, 0]} />
+                </group>
+
+                {/* Floating HUD Screen */}
+                <group position={[-0.08, 0, -0.05]} rotation={[0, 0.15, 0]}>
+                  <mesh>
+                    <boxGeometry args={[0.008, 0.05, 0.07]} />
+                    <meshBasicMaterial color={playerColor} transparent opacity={0.15} toneMapped={false} />
+                  </mesh>
+                  <mesh>
+                    <boxGeometry args={[0.008, 0.05, 0.07]} />
+                    <meshBasicMaterial color={playerColor} wireframe toneMapped={false} />
+                  </mesh>
+                  <Text
+                    position={[-0.01, 0.006, 0]}
+                    rotation={[0, -Math.PI / 2, 0]}
+                    fontSize={0.01}
+                    color={playerColor}
+                    anchorX="center"
+                    anchorY="middle"
+                  >
+                    SYS: THERMAL
+                  </Text>
+                  <Text
+                    position={[-0.01, -0.008, 0]}
+                    rotation={[0, -Math.PI / 2, 0]}
+                    fontSize={0.008}
+                    color={playerColor}
+                    anchorX="center"
+                    anchorY="middle"
+                  >
+                    {`LIVES: ${lives}`}
+                  </Text>
+                </group>
+
+                {/* Right Cyber-Arm (Forearm & Glove) */}
+                <group position={[0.08, -0.25, 0.15]} rotation={[-Math.PI / 6, -Math.PI / 12, 0]}>
+                  <mesh castShadow>
+                    <boxGeometry args={[0.06, 0.06, 0.3]} />
+                    <meshStandardMaterial color="#2d2d2d" metalness={0.8} roughness={0.2} />
+                  </mesh>
+                  <mesh position={[0.031, 0, 0]}>
+                    <boxGeometry args={[0.005, 0.03, 0.2]} />
+                    <meshBasicMaterial color={playerColor} toneMapped={false} />
+                  </mesh>
+                  <mesh position={[-0.02, 0.02, -0.2]} rotation={[0, 0.2, 0]}>
+                    <boxGeometry args={[0.04, 0.04, 0.06]} />
+                    <meshStandardMaterial color="#111111" metalness={0.3} roughness={0.8} />
+                  </mesh>
+                </group>
+              </>
             )}
 
             {currentWeapon === 'pistol' && (
-              <group scale={0.7} position={[0, 0, 0.1]}>
-                {/* Main Frame */}
-                <mesh position={[0, 0.02, 0.1]}>
-                  <boxGeometry args={[0.08, 0.14, 0.25]} />
-                  <meshStandardMaterial color="#1a1a1a" />
-                </mesh>
-                
-                {/* Grip with ergonomic detail */}
-                <mesh position={[0, -0.12, 0.18]} rotation={[Math.PI / 6, 0, 0]}>
-                  <boxGeometry args={[0.07, 0.18, 0.08]} />
-                  <meshStandardMaterial color="#0a0a0a" />
-                </mesh>
-                
-                {/* Neon slide detail */}
-                <mesh position={[0, 0.08, 0.1]}>
-                  <boxGeometry args={[0.085, 0.02, 0.2]} />
-                  <meshBasicMaterial color="#39ff14" toneMapped={false} />
-                </mesh>
+              <>
+                <group scale={0.7} position={[0, 0, 0.1]}>
+                  {/* Main Frame */}
+                  <mesh position={[0, 0.02, 0.1]}>
+                    <boxGeometry args={[0.08, 0.14, 0.25]} />
+                    <meshStandardMaterial color="#1a1a1a" />
+                  </mesh>
+                  
+                  {/* Grip with ergonomic detail */}
+                  <mesh position={[0, -0.12, 0.18]} rotation={[Math.PI / 6, 0, 0]}>
+                    <boxGeometry args={[0.07, 0.18, 0.08]} />
+                    <meshStandardMaterial color="#0a0a0a" />
+                  </mesh>
+                  
+                  {/* Neon slide detail */}
+                  <mesh position={[0, 0.08, 0.1]}>
+                    <boxGeometry args={[0.085, 0.02, 0.2]} />
+                    <meshBasicMaterial color={playerColor} toneMapped={false} />
+                  </mesh>
 
-                {/* Forward laser sight */}
-                <mesh position={[0, -0.04, -0.02]}>
-                  <boxGeometry args={[0.04, 0.04, 0.08]} />
-                  <meshStandardMaterial color="#000" />
-                </mesh>
-                <mesh position={[0, -0.04, -0.06]}>
-                  <sphereGeometry args={[0.01, 8, 8]} />
-                  <meshBasicMaterial color="#ff0055" toneMapped={false} />
-                </mesh>
+                  {/* Forward laser sight */}
+                  <mesh position={[0, -0.04, -0.02]}>
+                    <boxGeometry args={[0.04, 0.04, 0.08]} />
+                    <meshStandardMaterial color="#000" />
+                  </mesh>
+                  <mesh position={[0, -0.04, -0.06]}>
+                    <sphereGeometry args={[0.01, 8, 8]} />
+                    <meshBasicMaterial color={playerColor} toneMapped={false} />
+                  </mesh>
 
-                {/* Barrel */}
-                <mesh position={[0, 0.04, -0.08]} rotation={[Math.PI / 2, 0, 0]}>
-                  <cylinderGeometry args={[0.028, 0.028, 0.15, 12]} />
-                  <meshStandardMaterial color="#050505" metalness={1} />
-                </mesh>
-                <mesh position={[0, 0.04, -0.12]} rotation={[Math.PI / 2, 0, 0]}>
-                  <cylinderGeometry args={[0.032, 0.032, 0.02, 12]} />
-                  <meshBasicMaterial color="#39ff14" toneMapped={false} />
-                </mesh>
+                  {/* Barrel */}
+                  <mesh position={[0, 0.04, -0.08]} rotation={[Math.PI / 2, 0, 0]}>
+                    <cylinderGeometry args={[0.028, 0.028, 0.15, 12]} />
+                    <meshStandardMaterial color="#050505" metalness={1} />
+                  </mesh>
+                  <mesh position={[0, 0.04, -0.12]} rotation={[Math.PI / 2, 0, 0]}>
+                    <cylinderGeometry args={[0.032, 0.032, 0.02, 12]} />
+                    <meshBasicMaterial color={playerColor} toneMapped={false} />
+                  </mesh>
 
-                <group ref={gunBarrelRef} position={[0, 0.04, -0.16]} />
-              </group>
+                  {/* Holographic HUD Screen */}
+                  <group position={[-0.07, 0.08, 0.08]} rotation={[0, 0.15, 0]}>
+                    <mesh>
+                      <boxGeometry args={[0.008, 0.06, 0.09]} />
+                      <meshBasicMaterial color={playerColor} transparent opacity={0.15} toneMapped={false} />
+                    </mesh>
+                    <mesh>
+                      <boxGeometry args={[0.008, 0.06, 0.09]} />
+                      <meshBasicMaterial color={playerColor} wireframe toneMapped={false} />
+                    </mesh>
+                    <Text
+                      position={[-0.01, 0.008, 0]}
+                      rotation={[0, -Math.PI / 2, 0]}
+                      fontSize={0.012}
+                      color={playerColor}
+                      anchorX="center"
+                      anchorY="middle"
+                    >
+                      {`AMMO: ${ammo.pistol}`}
+                    </Text>
+                    <Text
+                      position={[-0.01, -0.012, 0]}
+                      rotation={[0, -Math.PI / 2, 0]}
+                      fontSize={0.008}
+                      color={playerColor}
+                      anchorX="center"
+                      anchorY="middle"
+                    >
+                      {`LIVES: ${lives}`}
+                    </Text>
+                  </group>
+
+                  {/* Holographic Laser Guide Line */}
+                  <mesh position={[0, 0.04, -10]} rotation={[Math.PI / 2, 0, 0]}>
+                    <cylinderGeometry args={[0.0015, 0.0015, 20]} />
+                    <meshBasicMaterial color={playerColor} transparent opacity={0.12} toneMapped={false} />
+                  </mesh>
+
+                  {/* Muzzle Flash group */}
+                  <group ref={muzzleFlashRef} scale={[0, 0, 0]} position={[0, 0.04, -0.16]}>
+                    <mesh rotation={[Math.PI / 2, 0, 0]}>
+                      <coneGeometry args={[0.04, 0.14, 6]} />
+                      <meshBasicMaterial color={playerColor} transparent opacity={0.8} toneMapped={false} />
+                    </mesh>
+                    <mesh>
+                      <sphereGeometry args={[0.03, 8, 8]} />
+                      <meshBasicMaterial color="#ffffff" transparent opacity={0.9} toneMapped={false} />
+                    </mesh>
+                  </group>
+
+                  <group ref={gunBarrelRef} position={[0, 0.04, -0.16]} />
+                </group>
+
+                {/* Right Cyber-Arm (Forearm & Glove) */}
+                <group position={[0.1, -0.22, 0.25]} rotation={[-Math.PI / 8, -Math.PI / 12, 0]}>
+                  <mesh castShadow>
+                    <boxGeometry args={[0.07, 0.07, 0.35]} />
+                    <meshStandardMaterial color="#2d2d2d" metalness={0.8} roughness={0.2} />
+                  </mesh>
+                  <mesh position={[0.036, 0, 0]}>
+                    <boxGeometry args={[0.005, 0.04, 0.25]} />
+                    <meshBasicMaterial color={playerColor} toneMapped={false} />
+                  </mesh>
+                  <mesh position={[-0.03, 0.02, -0.23]} rotation={[0, 0.2, 0]}>
+                    <boxGeometry args={[0.05, 0.05, 0.07]} />
+                    <meshStandardMaterial color="#111111" metalness={0.3} roughness={0.8} />
+                  </mesh>
+                </group>
+              </>
             )}
           </group>
         </group>

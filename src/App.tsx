@@ -10,6 +10,7 @@ import { Minimap } from './components/Minimap';
 import { useGameStore } from './store';
 import { sounds } from './lib/sounds';
 import { Heart, ArrowLeft, Copy } from 'lucide-react';
+import { LEVELS } from './constants';
 
 function HUD() {
   const gameState = useGameStore(state => state.gameState);
@@ -24,6 +25,8 @@ function HUD() {
   const playerCount = Object.keys(otherPlayers).length + 1;
   const leaveGame = useGameStore(state => state.leaveGame);
   const isMobile = useIsMobile();
+  const playerColor = useGameStore(state => state.playerColor) || '#39ff14';
+  const playerRotation = useGameStore(state => state.playerRotation) || 0;
 
   const enemies = useGameStore(state => state.enemies);
 
@@ -61,38 +64,143 @@ function HUD() {
     return players.sort((a, b) => b.score - a.score).slice(0, 4);
   }, [score, playerState, otherPlayers, enemies]);
 
+  const heading = Math.round(((playerRotation * 180 / Math.PI) % 360 + 360) % 360);
+  const compassDirections = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  const directionName = compassDirections[Math.round(heading / 45) % 8];
+
   return (
     <>
-      {/* Crosshair */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex flex-col items-center">
-        <div className="relative">
-          <div className={`w-4 h-4 border-2 rounded-full ${playerState === 'disabled' ? 'border-red-500' : 'border-lime-400'}`} />
-          <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-1 rounded-full ${playerState === 'disabled' ? 'bg-red-500' : 'bg-lime-400'}`} />
-        </div>
+      {/* Curved Helmet Visor Frame */}
+      <div 
+        className="absolute inset-0 pointer-events-none z-[30] transition-all duration-500"
+        style={{
+          boxShadow: `inset 0 0 120px rgba(0,0,0,0.85), inset 0 0 30px ${playerColor}15`,
+          border: `1px solid ${playerColor}08`
+        }}
+      />
 
+      {/* Cyber Visor Corner Brackets */}
+      {/* Top Left Bracket */}
+      <div 
+        className="absolute top-4 left-4 pointer-events-none flex flex-col gap-1 transition-all duration-300 font-mono text-[9px] font-black z-45"
+        style={{ color: playerColor }}
+      >
+        <div className="flex gap-1.5 items-center">
+          <div className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+          <span>HUD LINK: ACTIVE</span>
+        </div>
+        <div className="opacity-40">SYS_V: 1.0.4</div>
+        <div className="opacity-40">GRID: SYNCED</div>
+        <div className="w-8 h-8 border-t border-l border-current absolute -top-1 -left-1 opacity-70" />
+      </div>
+
+      {/* Top Right Bracket */}
+      <div 
+        className="absolute top-4 right-4 pointer-events-none flex flex-col items-end gap-1 transition-all duration-300 font-mono text-[9px] font-black z-45"
+        style={{ color: playerColor }}
+      >
+        <div>FCS TYPE: AM-08</div>
+        <div className="opacity-40">LOCK RANGE: 45M</div>
+        <div className="opacity-40">PWR: 100%</div>
+        <div className="w-8 h-8 border-t border-r border-current absolute -top-1 -right-1 opacity-70" />
+      </div>
+
+      {/* Top Center Compass HUD */}
+      <div 
+        className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none transition-all duration-300 z-45"
+        style={{ color: playerColor }}
+      >
+        <div className="text-[9px] font-black uppercase tracking-[0.2em] opacity-80 mb-1">
+          Tactical Heading
+        </div>
+        <div className="flex items-center gap-3 bg-black/60 border border-current/30 px-4 py-1 rounded-lg shadow-[0_0_15px_rgba(0,0,0,0.5)] backdrop-blur-sm">
+          <span className="font-black text-xs tracking-widest">{directionName}</span>
+          <span className="w-px h-3 bg-current/30" />
+          <span className="font-black text-sm w-9 text-center tabular-nums">{heading}°</span>
+        </div>
+        <div className="w-48 h-5 border-b border-current/20 mt-1 relative overflow-hidden flex items-end">
+          <div 
+            className="flex gap-4 absolute bottom-0 left-1/2 h-3 transition-transform duration-75 ease-out"
+            style={{ 
+              transform: `translateX(calc(-50% - ${playerRotation * 180}px))` 
+            }}
+          >
+            {Array.from({ length: 36 }).map((_, idx) => {
+              const deg = idx * 10;
+              let label = `${deg}`;
+              if (deg === 0 || deg === 360) label = 'N';
+              else if (deg === 90) label = 'E';
+              else if (deg === 180) label = 'S';
+              else if (deg === 270) label = 'W';
+              
+              const isMajor = deg % 30 === 0;
+              return (
+                <div key={idx} className="flex flex-col items-center w-8 shrink-0">
+                  <span className="text-[6px] font-black tracking-tighter opacity-80">{label}</span>
+                  <div className={`w-0.5 bg-current ${isMajor ? 'h-1.5' : 'h-0.5'} mt-0.5 opacity-60`} />
+                </div>
+              );
+            })}
+          </div>
+          <div className="absolute left-1/2 -translate-x-1/2 bottom-0 w-0.5 h-2 bg-current shadow-[0_0_5px_currentColor]" />
+        </div>
+      </div>
+
+      {/* Crosshair */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex flex-col items-center z-45">
+        <div className="relative">
+          <div 
+            className="w-5 h-5 border-2 rounded-full transition-all duration-300" 
+            style={{ borderColor: playerState === 'disabled' ? '#ef4444' : playerColor }}
+          />
+          <div 
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full transition-all duration-300" 
+            style={{ backgroundColor: playerState === 'disabled' ? '#ef4444' : playerColor }}
+          />
+        </div>
       </div>
 
       {/* HUD Left - Score & Leaderboard */}
-      <div className="absolute top-2 left-2 md:top-4 md:left-4 flex flex-col gap-2 md:gap-4 pointer-events-none">
-        <div className="text-lime-400 text-lg md:text-2xl font-bold drop-shadow-[0_0_8px_rgba(163,230,53,0.8)]">
+      <div className="absolute top-2 left-2 md:top-4 md:left-4 flex flex-col gap-2 md:gap-4 pointer-events-none z-45">
+        <div 
+          className="text-lg md:text-2xl font-black italic uppercase tracking-wider" 
+          style={{ color: playerColor, filter: `drop-shadow(0 0 6px ${playerColor}cc)` }}
+        >
           SCORE: {score.toString().padStart(4, '0')}
         </div>
 
-        <div className="bg-black/40 border border-lime-400/30 p-2 md:p-3 rounded-lg flex flex-col gap-1 md:gap-2">
-          <div className="text-lime-400/60 text-[10px] md:text-xs font-black uppercase tracking-[0.2em]">Weapon Systems</div>
+        <div 
+          className="bg-black/60 border p-2 md:p-3 rounded-lg flex flex-col gap-1 md:gap-2 shadow-[0_0_15px_rgba(0,0,0,0.5)] backdrop-blur-sm"
+          style={{ borderColor: `${playerColor}30` }}
+        >
+          <div 
+            className="text-[10px] md:text-xs font-black uppercase tracking-[0.2em]"
+            style={{ color: `${playerColor}90` }}
+          >
+            Weapon Systems
+          </div>
           <div className="flex items-end justify-between gap-4">
-            <div className="text-lime-400 text-base md:text-xl font-black uppercase tracking-tighter">
+            <div 
+              className="text-base md:text-xl font-black uppercase tracking-tighter"
+              style={{ color: playerColor }}
+            >
               {currentWeapon}
             </div>
-            <div className={`text-xl md:text-3xl font-black ${ammo[currentWeapon] < 5 ? 'text-red-500 animate-pulse' : 'text-lime-400'}`}>
+            <div 
+              className="text-xl md:text-3xl font-black transition-all"
+              style={{ color: ammo[currentWeapon] < 5 ? '#ef4444' : playerColor }}
+            >
               {ammo[currentWeapon] === Infinity ? '∞' : ammo[currentWeapon].toString().padStart(2, '0')}
             </div>
           </div>
           {ammo[currentWeapon] !== Infinity && (
-            <div className="w-full bg-lime-900/30 h-1 rounded-full overflow-hidden">
+            <div className="w-full bg-black/80 h-1 rounded-full overflow-hidden">
               <div 
-                className={`h-full transition-all duration-300 ${ammo[currentWeapon] < 5 ? 'bg-red-500' : 'bg-lime-400'}`}
-                style={{ width: `${(ammo[currentWeapon] / (currentWeapon === 'gun' ? 30 : 20)) * 100}%` }}
+                className="h-full transition-all duration-300"
+                style={{ 
+                  backgroundColor: ammo[currentWeapon] < 5 ? '#ef4444' : playerColor,
+                  width: `${(ammo[currentWeapon] / (currentWeapon === 'gun' ? 30 : 20)) * 100}%` 
+                }}
               />
             </div>
           )}
@@ -103,19 +211,32 @@ function HUD() {
             <Heart
               key={i}
               size={isMobile ? 16 : 24}
-              fill={i < lives ? "#a3e635" : "transparent"}
-              color={i < lives ? "#a3e635" : "#333"}
-              className={`${i < lives ? 'drop-shadow-[0_0_8px_rgba(163,230,53,0.8)]' : ''} transition-all duration-300`}
+              fill={i < lives ? playerColor : "transparent"}
+              color={i < lives ? playerColor : "#333"}
+              className="transition-all duration-300"
+              style={{ filter: i < lives ? `drop-shadow(0 0 5px ${playerColor}cc)` : 'none' }}
             />
           ))}
         </div>
         
-        {/* Leaderboard - Hide on mobile if screen is small, or make smaller */}
+        {/* Leaderboard */}
         {!isMobile && (
-          <div className="bg-black/50 border border-lime-900/50 p-3 rounded w-48 flex flex-col gap-1">
-            <div className="text-lime-400/70 text-xs font-bold mb-1 border-b border-lime-900/50 pb-1">LEADERBOARD</div>
+          <div 
+            className="bg-black/60 border p-3 rounded w-48 flex flex-col gap-1 shadow-[0_0_15px_rgba(0,0,0,0.5)] backdrop-blur-sm"
+            style={{ borderColor: `${playerColor}20` }}
+          >
+            <div 
+              className="text-xs font-black tracking-widest mb-1 border-b pb-1"
+              style={{ color: playerColor, borderColor: `${playerColor}20` }}
+            >
+              LEADERBOARD
+            </div>
             {leaderboard.map((p, i) => (
-              <div key={p.id} className={`flex justify-between text-sm ${p.isMe ? 'text-lime-400 font-bold' : 'text-lime-400/70'}`}>
+              <div 
+                key={p.id} 
+                className={`flex justify-between text-xs font-bold ${p.isMe ? 'opacity-100' : 'opacity-60'}`}
+                style={{ color: playerColor }}
+              >
                 <span>{i + 1}. {p.id}</span>
                 <span>{p.score}</span>
               </div>
@@ -125,14 +246,17 @@ function HUD() {
       </div>
 
       {/* Minimap - Bottom Left */}
-      <div className="absolute bottom-4 left-4 md:bottom-8 md:left-8 pointer-events-none z-40">
+      <div className="absolute bottom-4 left-4 md:bottom-8 md:left-8 pointer-events-none z-45">
         <Minimap />
       </div>
       
       {/* HUD Right - Time, Leave, Events */}
-      <div className="absolute top-2 right-2 md:top-4 md:right-4 flex flex-col items-end gap-1 md:gap-2 pointer-events-none z-40">
+      <div className="absolute top-2 right-2 md:top-4 md:right-4 flex flex-col items-end gap-1 md:gap-2 pointer-events-none z-45">
         {gameState === 'playing' && (
-          <div className="text-lime-400 text-lg md:text-2xl font-bold drop-shadow-[0_0_8px_rgba(163,230,53,0.8)]">
+          <div 
+            className="text-lg md:text-2xl font-black italic uppercase tracking-wider"
+            style={{ color: playerColor, filter: `drop-shadow(0 0 6px ${playerColor}cc)` }}
+          >
             TIME: {Math.floor(timeLeft / 60)}:{(Math.floor(timeLeft) % 60).toString().padStart(2, '0')}
           </div>
         )}
@@ -142,12 +266,23 @@ function HUD() {
         >
           LEAVE
         </button>
-        {!isMobile && <div className="text-lime-400/50 text-xs mt-1 uppercase tracking-widest font-bold">ESC to unlock cursor</div>}
+        {!isMobile && (
+          <div 
+            className="text-[10px] mt-1 uppercase tracking-widest font-black"
+            style={{ color: playerColor, opacity: 0.5 }}
+          >
+            ESC to unlock cursor
+          </div>
+        )}
 
         {/* Event Log */}
         <div className="mt-2 md:mt-4 flex flex-col items-end gap-1 pointer-events-none">
           {events.slice(-3).map(event => (
-            <div key={event.id} className="text-[10px] md:text-xs font-bold text-fuchsia-400 bg-black/50 px-2 py-1 rounded border border-fuchsia-900/50 animate-pulse">
+            <div 
+              key={event.id} 
+              className="text-[10px] md:text-xs font-black bg-black/60 px-2 py-1 rounded border animate-pulse"
+              style={{ color: playerColor, borderColor: `${playerColor}30` }}
+            >
               {event.message}
             </div>
           ))}
@@ -155,16 +290,19 @@ function HUD() {
       </div>
 
       {/* Multiplayer Info */}
-      <div className="absolute top-12 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none">
-        <div className="text-lime-400 text-[10px] md:text-sm font-bold drop-shadow-[0_0_8px_rgba(163,230,53,0.8)] opacity-70">
+      <div className="absolute top-12 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none z-45">
+        <div 
+          className="text-[10px] md:text-xs font-black tracking-widest uppercase"
+          style={{ color: playerColor, filter: `drop-shadow(0 0 4px ${playerColor}aa)`, opacity: 0.7 }}
+        >
           PLAYERS ONLINE: {playerCount}
         </div>
       </div>
 
       {/* Damage Overlay */}
       {playerState === 'disabled' && (
-        <div className="absolute inset-0 bg-red-500/20 pointer-events-none flex items-center justify-center">
-          <div className="text-red-500 text-4xl md:text-6xl font-black tracking-widest drop-shadow-[0_0_20px_rgba(239,68,68,1)] animate-pulse text-center">
+        <div className="absolute inset-0 bg-red-950/40 pointer-events-none flex items-center justify-center z-50">
+          <div className="text-red-500 text-4xl md:text-6xl font-black tracking-widest drop-shadow-[0_0_20px_rgba(239,68,68,1)] animate-pulse text-center uppercase italic">
             SYSTEM DISABLED
           </div>
         </div>
@@ -197,6 +335,34 @@ function useIsMobile() {
   return isMobile;
 }
 
+function copyToClipboard(text: string) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).catch(() => {
+      fallbackCopy(text);
+    });
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text: string) {
+  const textArea = document.createElement("textarea");
+  textArea.value = text;
+  textArea.style.top = "0";
+  textArea.style.left = "0";
+  textArea.style.position = "fixed";
+  textArea.style.opacity = "0";
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+  try {
+    document.execCommand('copy');
+  } catch (err) {
+    console.error('Fallback copy failed', err);
+  }
+  document.body.removeChild(textArea);
+}
+
 export default function App() {
   const gameState = useGameStore(state => state.gameState);
   const gameMode = useGameStore(state => state.gameMode);
@@ -208,6 +374,7 @@ export default function App() {
   const isConnecting = useGameStore(state => state.isConnecting);
   const startGame = useGameStore(state => state.startGame);
   const isCursorLocked = useGameStore(state => state.isCursorLocked);
+  const currentLevel = useGameStore(state => state.currentLevel);
   
   const currentPlayerCount = Object.keys(otherPlayers).length + 1;
 
@@ -276,7 +443,7 @@ export default function App() {
           <div className="text-[10px] text-lime-400/50 uppercase font-black tracking-widest">Room Code</div>
           <div 
             onClick={() => {
-              navigator.clipboard.writeText(roomCode);
+              copyToClipboard(roomCode);
               alert(`Room Code ${roomCode} copied to clipboard!`);
             }}
             className="px-3 py-1 bg-lime-400/10 border border-lime-400/30 text-lime-400 font-black text-sm rounded cursor-pointer hover:bg-lime-400/20 transition-all active:scale-95"
@@ -324,19 +491,20 @@ export default function App() {
 
       {/* Waiting / Lobby UI */}
       {gameState === 'waiting' && (
-        <div className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center z-[140] pointer-events-auto backdrop-blur-xl transition-all duration-500">
-          {/* Global Back Arrow */}
-          <button 
-            onClick={() => useGameStore.getState().leaveGame()}
-            className="absolute top-8 left-8 flex items-center gap-2 text-lime-400/60 hover:text-lime-400 transition-colors group z-[150]"
-          >
-            <div className="p-2 border border-lime-400/20 rounded-lg group-hover:bg-lime-400/10 transition-all">
-              <ArrowLeft size={24} />
-            </div>
-            <span className="font-black uppercase text-xs tracking-widest hidden md:block">Return to Base</span>
-          </button>
+        <div className="absolute inset-0 bg-black/95 overflow-y-auto z-[140] pointer-events-auto backdrop-blur-xl transition-all duration-500 custom-scrollbar">
+          <div className="relative min-h-full w-full flex flex-col items-center justify-center py-12 px-6 gap-8">
+            {/* Global Back Arrow */}
+            <button 
+              onClick={() => useGameStore.getState().leaveGame()}
+              className="absolute top-8 left-8 flex items-center gap-2 text-lime-400/60 hover:text-lime-400 transition-colors group z-[150]"
+            >
+              <div className="p-2 border border-lime-400/20 rounded-lg group-hover:bg-lime-400/10 transition-all">
+                <ArrowLeft size={24} />
+              </div>
+              <span className="font-black uppercase text-xs tracking-widest hidden md:block">Return to Base</span>
+            </button>
 
-          <div className="flex flex-col items-center gap-8 max-w-xl w-full px-6">
+            <div className="flex flex-col items-center gap-8 max-w-xl w-full">
             <div className="relative text-center">
               <h2 className="text-5xl md:text-7xl font-black text-lime-400 tracking-tighter uppercase italic animate-pulse">
                 Establishing Link
@@ -424,7 +592,7 @@ export default function App() {
                   <button 
                     onClick={() => {
                       if (roomCode) {
-                        navigator.clipboard.writeText(roomCode);
+                        copyToClipboard(roomCode);
                         sounds.playCollect();
                       }
                     }}
@@ -450,7 +618,8 @@ export default function App() {
             </p>
           </div>
         </div>
-      )}
+      </div>
+    )}
 
       {/* Connecting / Loading Overlay */}
       {isConnecting && (
@@ -468,8 +637,9 @@ export default function App() {
 
       {/* Menus */}
       {gameState === 'menu' && (
-        <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-[150] pointer-events-auto backdrop-blur-md text-center">
-          <div className="relative mb-12">
+        <div className="absolute inset-0 bg-black/90 overflow-y-auto z-[150] pointer-events-auto backdrop-blur-md text-center custom-scrollbar">
+          <div className="min-h-full w-full flex flex-col items-center justify-center py-12 px-6">
+            <div className="relative mb-12">
             <h1 className="text-6xl md:text-8xl font-black text-lime-400 drop-shadow-[0_0_30px_rgba(163,230,53,0.6)] tracking-tighter uppercase italic">
               imposterfrnd
             </h1>
@@ -571,7 +741,8 @@ export default function App() {
             Terminal Ready . . . Waiting for pilot input
           </div>
         </div>
-      )}
+      </div>
+    )}
 
       {gameState === 'gameover' && (
         <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-[200] pointer-events-auto backdrop-blur-xl text-center">
@@ -597,24 +768,37 @@ export default function App() {
         <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-[200] pointer-events-auto backdrop-blur-xl text-center animate-in fade-in duration-500">
           <div className="absolute w-[450px] h-[450px] bg-lime-500/15 rounded-full blur-[100px] pointer-events-none z-0 animate-pulse" />
           
-          <h1 className="text-7xl md:text-9xl font-black text-lime-400 mb-4 drop-shadow-[0_0_40px_rgba(163,230,53,0.9)] tracking-tighter italic uppercase underline decoration-4 underline-offset-8 z-10 animate-bounce">
-            VICTORY
+          <h1 className="text-6xl md:text-8xl font-black text-lime-400 mb-4 drop-shadow-[0_0_40px_rgba(163,230,53,0.9)] tracking-tighter italic uppercase underline decoration-4 underline-offset-8 z-10 animate-bounce">
+            {currentLevel < LEVELS.length ? `LEVEL ${currentLevel} COMPLETED` : 'CAMPAIGN COMPLETED'}
           </h1>
           <div className="text-lg md:text-2xl text-white/80 uppercase font-black tracking-[0.2em] mb-8 z-10">
-            ALL CPU BOTS ELIMINATED!
+            {currentLevel < LEVELS.length 
+              ? `ALL BOTS IN "${LEVELS[currentLevel - 1].title}" ELIMINATED!` 
+              : 'YOU DEFEATED ALL CYBER-IMPOSTERS IN ALL LEVELS!'}
           </div>
           <div className="text-3xl md:text-5xl text-lime-400 mb-12 font-black tracking-tighter z-10 bg-lime-400/10 border-2 border-lime-400/30 px-8 py-5 rounded-2xl shadow-[0_0_35px_rgba(163,230,53,0.2)]">
-            FINAL SCORE: {score}
+            CURRENT SCORE: {score}
           </div>
-          <button
-            onMouseDown={() => {
-              useGameStore.getState().leaveGame();
-              setMenuView('main');
-            }}
-            className="px-12 py-5 bg-lime-500/10 border-2 border-lime-400 text-lime-400 text-2xl font-black rounded hover:bg-lime-400 hover:text-black hover:scale-105 active:scale-95 transition-all duration-300 shadow-[0_0_30px_rgba(163,230,53,0.4)] uppercase tracking-widest z-10"
-          >
-            System Reboot
-          </button>
+          {currentLevel < LEVELS.length ? (
+            <button
+              onMouseDown={() => {
+                useGameStore.getState().nextLevel();
+              }}
+              className="px-12 py-5 bg-lime-500/10 border-2 border-lime-400 text-lime-400 text-2xl font-black rounded hover:bg-lime-400 hover:text-black hover:scale-105 active:scale-95 transition-all duration-300 shadow-[0_0_30px_rgba(163,230,53,0.4)] uppercase tracking-widest z-10"
+            >
+              Proceed to Level {currentLevel + 1}
+            </button>
+          ) : (
+            <button
+              onMouseDown={() => {
+                useGameStore.getState().leaveGame();
+                setMenuView('main');
+              }}
+              className="px-12 py-5 bg-lime-500/10 border-2 border-lime-400 text-lime-400 text-2xl font-black rounded hover:bg-lime-400 hover:text-black hover:scale-105 active:scale-95 transition-all duration-300 shadow-[0_0_30px_rgba(163,230,53,0.4)] uppercase tracking-widest z-10"
+            >
+              System Reboot
+            </button>
+          )}
         </div>
       )}
     </div>

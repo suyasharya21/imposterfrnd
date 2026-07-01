@@ -71,6 +71,32 @@ export function OtherPlayer({ id }: { id: string }) {
           <meshBasicMaterial color={data.state === 'disabled' ? '#111' : '#ffffff'} />
         </mesh>
 
+        {/* Futuristic Weapon */}
+        {data.state === 'active' && (
+          <group position={[0.45, 0.8, 0.35]}>
+            {/* Gun Body */}
+            <mesh castShadow>
+              <boxGeometry args={[0.08, 0.12, 0.4]} />
+              <meshStandardMaterial color="#1a1a1a" metalness={0.8} roughness={0.2} />
+            </mesh>
+            {/* Glowing Power Core */}
+            <mesh position={[0, 0.02, 0.05]}>
+              <boxGeometry args={[0.06, 0.04, 0.1]} />
+              <meshBasicMaterial color={color} toneMapped={false} />
+            </mesh>
+            {/* Barrel */}
+            <mesh position={[0, 0.02, -0.25]} rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[0.025, 0.025, 0.15, 8]} />
+              <meshStandardMaterial color="#050505" metalness={0.9} />
+            </mesh>
+            {/* Laser Sight beam (subtle point forward) */}
+            <mesh position={[0, 0.02, -1.0]} rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[0.001, 0.001, 1.5]} />
+              <meshBasicMaterial color={color} transparent opacity={0.25} toneMapped={false} />
+            </mesh>
+          </group>
+        )}
+
         {/* Username Label */}
         <Text
           position={[0, 2.5, 0]}

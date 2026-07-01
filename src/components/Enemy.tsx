@@ -11,7 +11,7 @@ import { useGameStore, EnemyData } from '../store';
 import { Text, Float } from '@react-three/drei';
 
 const ENEMY_SPEED = 7.5;
-const CHASE_DIST = 160;
+const CHASE_DIST = 45;
 const SHOOT_DIST = 35;
 const SHOOT_COOLDOWN = 1200; 
 const AIM_TIME = 350; 
@@ -88,12 +88,15 @@ export function Enemy({ data }: { data: EnemyData }) {
       return;
     }
 
-    if (body.current && body.current.bodyType() === rapier.RigidBodyType.Fixed && data.state === 'active') {
-       body.current.setBodyType(rapier.RigidBodyType.Dynamic, true);
-       if (groupRef.current) {
-         groupRef.current.rotation.x = 0;
-         groupRef.current.position.y = 0;
-       }
+    if (data.state === 'active') {
+      if (groupRef.current) {
+        groupRef.current.rotation.x = 0;
+        groupRef.current.rotation.z = 0;
+        groupRef.current.position.y = 0;
+      }
+      if (body.current && body.current.bodyType() === rapier.RigidBodyType.Fixed) {
+        body.current.setBodyType(rapier.RigidBodyType.Dynamic, true);
+      }
     }
 
     const pos = body.current.translation();
@@ -161,10 +164,36 @@ export function Enemy({ data }: { data: EnemyData }) {
       return true; // No hit means clear air? Or we hit the target itself
     };
 
+    const checkCanSeeTarget = (targetPos: THREE.Vector3) => {
+      const dist = currentPos.distanceTo(targetPos);
+      
+      // Proximity sensing (hearing range)
+      if (dist < 6.0) {
+        return checkLoS(targetPos);
+      }
+      
+      // Visual range check
+      if (dist > CHASE_DIST) {
+        return false;
+      }
+      
+      // Visual field of view check (110-degree cone in front of bot)
+      if (groupRef.current) {
+        const forwardDir = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), groupRef.current.rotation.y);
+        const toTarget = new THREE.Vector3().subVectors(targetPos, currentPos).normalize();
+        const dot = forwardDir.dot(toTarget);
+        if (dot < 0.57) { // cos(55 degrees) ≈ 0.57
+          return false; // Target is behind or to the side
+        }
+      }
+      
+      return checkLoS(targetPos);
+    };
+
     if (playerState === 'active') {
       const pPos = new THREE.Vector3(playerPosition[0], pos.y, playerPosition[2]);
       const distToPlayer = currentPos.distanceTo(pPos);
-      if (distToPlayer < closestDist && checkLoS(pPos)) {
+      if (distToPlayer < closestDist && checkCanSeeTarget(pPos)) {
         closestDist = distToPlayer;
         closestTargetPos = pPos;
       }
@@ -175,7 +204,7 @@ export function Enemy({ data }: { data: EnemyData }) {
       if (p.state === 'active') {
         const pPos = new THREE.Vector3(p.position[0], pos.y, p.position[2]);
         const dist = currentPos.distanceTo(pPos);
-        if (dist < closestDist && checkLoS(pPos)) {
+        if (dist < closestDist && checkCanSeeTarget(pPos)) {
           closestDist = dist;
           closestTargetPos = pPos;
         }
@@ -471,7 +500,7 @@ export function Enemy({ data }: { data: EnemyData }) {
       mass={5}
       type="dynamic"
       position={data.position}
-      enabledRotations={[false, false, false]}
+      enabledRotations={[false, true, false]}
       gravityScale={3}
       linearDamping={1}
       friction={1}

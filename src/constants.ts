@@ -16,6 +16,22 @@ export function mulberry32(a: number) {
 export const ARENA_SIZE = 200;
 export const ARENA_HALF_SIZE = 100;
 
+export interface LevelConfig {
+  level: number;
+  arenaSize: number;
+  obstacleCount: number;
+  botCount: number;
+  timeLimit: number;
+  title: string;
+}
+
+export const LEVELS: LevelConfig[] = [
+  { level: 1, arenaSize: 120, obstacleCount: 40, botCount: 4, timeLimit: 90, title: "Level 1: Training Grounds" },
+  { level: 2, arenaSize: 160, obstacleCount: 80, botCount: 6, timeLimit: 120, title: "Level 2: City Block" },
+  { level: 3, arenaSize: 200, obstacleCount: 120, botCount: 8, timeLimit: 150, title: "Level 3: Cyber Maze" },
+  { level: 4, arenaSize: 240, obstacleCount: 160, botCount: 10, timeLimit: 180, title: "Level 4: Megacity Grid" }
+];
+
 export interface ObstacleData {
   type: 'box' | 'cylinder';
   position: [number, number, number];
@@ -25,15 +41,16 @@ export interface ObstacleData {
   graffitiType?: 'bow' | 'chakra' | 'hanuman' | 'om' | 'lotus' | 'shiva_eye' | 'trishula' | 'tag1' | 'tag2' | 'cyber' | 'skull' | 'neon_bolt' | 'neon_eye' | 'neon_grid' | 'neon_skull' | 'neon_gun';
 }
 
-export const getObstacles = (_isMobile: boolean, seed: number = 12345): ObstacleData[] => {
-  const count = 120; // Increased for a denser arena
+export const getObstacles = (_isMobile: boolean, seed: number = 12345, config?: LevelConfig): ObstacleData[] => {
+  const count = config ? config.obstacleCount : 120; 
   const rng = mulberry32(seed);
   const graffitiTypes: ('bow' | 'chakra' | 'hanuman' | 'om' | 'lotus' | 'shiva_eye' | 'trishula' | 'tag1' | 'tag2' | 'cyber' | 'skull' | 'neon_bolt' | 'neon_eye' | 'neon_grid' | 'neon_skull' | 'neon_gun')[] = ['bow', 'chakra', 'hanuman', 'om', 'lotus', 'shiva_eye', 'trishula', 'tag1', 'tag2', 'cyber', 'skull', 'neon_bolt', 'neon_eye', 'neon_grid', 'neon_skull', 'neon_gun'];
   
   const obstacles: ObstacleData[] = [];
   const BOUNDARY_MARGIN = 10; // Closer to outer walls
   const OBSTACLE_GAP = 4;    // Reduced gap for much higher density
-  const SPAWN_RADIUS = ARENA_HALF_SIZE - BOUNDARY_MARGIN;
+  const arenaHalfSize = config ? config.arenaSize / 2 : ARENA_HALF_SIZE;
+  const SPAWN_RADIUS = arenaHalfSize - BOUNDARY_MARGIN;
 
   for (let i = 0; i < count; i++) {
     let attempts = 0;
