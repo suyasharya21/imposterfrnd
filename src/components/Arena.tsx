@@ -1,13 +1,13 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
- */
+*/
 
-import { RigidBody, CuboidCollider, CylinderCollider, InstancedRigidBodies } from '@react-three/rapier';
+import { RigidBody, CuboidCollider, InstancedRigidBodies, InstancedRigidBodyProps } from '@react-three/rapier';
 import { Grid } from '@react-three/drei';
-import { useMemo, useRef, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { getObstacles, LevelConfig } from '../constants';
+import { getObstacles, LEVELS } from '../constants';
 import { useGameStore } from '../store';
 
 function useIsMobile() {
@@ -31,9 +31,7 @@ function useIsMobile() {
   return isMobile;
 }
 
-// ---------------------------------------------------------
 // Procedural SVG to WebGL Texture Cache
-// ---------------------------------------------------------
 const textureCache: Record<string, THREE.Texture> = {};
 
 function getGraffitiSvgContent(type: string): string {
@@ -101,7 +99,6 @@ function getGraffitiTexture(type: string, color: string): THREE.Texture {
   const svgContent = getGraffitiSvgContent(type);
   const svgString = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30" width="256" height="256" style="color: ${color}">${svgContent}</svg>`;
   
-  // Convert SVG string to Base64 Data URI
   const base64Content = window.btoa(unescape(encodeURIComponent(svgString)));
   const dataUri = `data:image/svg+xml;base64,${base64Content}`;
   
@@ -119,318 +116,102 @@ function getGraffitiTexture(type: string, color: string): THREE.Texture {
   return texture;
 }
 
-// ---------------------------------------------------------
-// Double-Sided WebGL Plane-based Graffiti Component
-// ---------------------------------------------------------
-function Graffiti({ type, size, opacity = 1 }: { type: 'bow' | 'chakra' | 'hanuman' | 'om' | 'lotus' | 'shiva_eye' | 'trishula' | 'tag1' | 'tag2' | 'cyber' | 'skull' | 'neon_bolt' | 'neon_eye' | 'neon_grid' | 'neon_skull' | 'neon_gun', size: [number, number, number], opacity?: number }) {
-  const isWide = size[0] > size[2];
-  const graffitiScale = Math.min(size[0], size[1], size[2], 8);
-
-  const colors: Record<string, string> = {
-    bow: '#39ff14', om: '#39ff14', lotus: '#39ff14', shiva_eye: '#39ff14',
-    chakra: '#ff0055', trishula: '#ff0055', hanuman: '#ff0055',
-    tag1: '#00ffff', tag2: '#ffcc33', cyber: '#9013fe', skull: '#ffffff',
-    neon_bolt: '#ffff00', neon_eye: '#00ffff', neon_grid: '#ff00ff', neon_skull: '#ff5500', neon_gun: '#39ff14'
-  };
-  const color = colors[type] || '#ffffff';
-
-  const texture = useMemo(() => getGraffitiTexture(type, color), [type, color]);
-
-  // Define the two opposite sides for double-sided rendering
-  const sides = isWide 
-    ? [
-        { pos: [0, 0, size[2] / 2 + 0.015] as [number, number, number], rot: [0, 0, 0] as [number, number, number] },
-        { pos: [0, 0, -size[2] / 2 - 0.015] as [number, number, number], rot: [0, Math.PI, 0] as [number, number, number] }
-      ]
-    : [
-        { pos: [size[0] / 2 + 0.015, 0, 0] as [number, number, number], rot: [0, Math.PI / 2, 0] as [number, number, number] },
-        { pos: [-size[0] / 2 - 0.015, 0, 0] as [number, number, number], rot: [0, -Math.PI / 2, 0] as [number, number, number] }
-      ];
-
-  return (
-    <>
-      {sides.map((side, index) => (
-        <mesh 
-          key={index} 
-          position={side.pos} 
-          rotation={side.rot}
-        >
-          <planeGeometry args={[graffitiScale, graffitiScale]} />
-          <meshBasicMaterial 
-            map={texture} 
-            transparent={true} 
-            opacity={opacity}
-            toneMapped={false}
-            depthWrite={false}
-            polygonOffset={true}
-            polygonOffsetFactor={-4}
-          />
-        </mesh>
-      ))}
-    </>
-  );
-}
-
-// ---------------------------------------------------------
-// Boundary Wall Component
-// ---------------------------------------------------------
-function Wall({ name, position, rotation, isMobile, arenaSize, graffiti = [] }: { name: string, position: [number, number, number], rotation: [number, number, number], isMobile: boolean, arenaSize: number, graffiti?: ('bow' | 'chakra' | 'hanuman' | 'om' | 'lotus' | 'shiva_eye' | 'trishula' | 'tag1' | 'tag2' | 'cyber' | 'skull' | 'neon_bolt' | 'neon_eye' | 'neon_grid' | 'neon_skull' | 'neon_gun')[] }) {
-  const adjustedPosition: [number, number, number] = [position[0], 0, position[2]];
-  const halfSize = arenaSize / 2;
-  
-  // Calculate dynamic offsets for conduits and graffiti
-  const step = halfSize * 0.4;
-  const conduitOffsets = [-step * 2, -step, 0, step, step * 2];
-
-  return (
-    <RigidBody type="fixed" name={name} position={adjustedPosition} rotation={rotation} colliders={false} ccd={true}>
-      <CuboidCollider args={[halfSize, 6, 1.5]} position={[0, 6, -1.0]} />
-      {/* Solid Wall - Dark Metallic Carbon Fiber look */}
-      <mesh position={[0, 6, 0]}>
-        <boxGeometry args={[arenaSize, 12, 1]} />
-        <meshStandardMaterial color="#030306" roughness={0.25} metalness={0.9} />
-      </mesh>
-      
-      {/* Decorative Panels */}
-      <mesh position={[0, 6, 0.51]}>
-        <planeGeometry args={[arenaSize, 12]} />
-        <meshStandardMaterial 
-          color="#0c0c12" 
-          transparent 
-          opacity={0.3} 
-          roughness={0.2}
-          metalness={0.8}
-        />
-      </mesh>
-
-      {/* Vertical Glowing Conduits (Alternating with Graffiti positions) */}
-      {conduitOffsets.map((xOffset) => (
-        <mesh key={xOffset} position={[xOffset, 6, 0.515]}>
-          <cylinderGeometry args={[0.06, 0.06, 12, 8]} />
-          <meshBasicMaterial color="#00f0ff" toneMapped={false} />
-        </mesh>
-      ))}
-
-      {/* Graffiti on walls */}
-      {graffiti.map((type, i) => {
-        const graffitiOffset = halfSize * 0.4;
-        const xPos = (i - (graffiti.length - 1) / 2) * graffitiOffset - (graffitiOffset / 2);
-        return (
-          <group key={`${type}-${i}`} position={[xPos, 6, 0.52]}>
-            <Graffiti type={type} size={[12, 12, 1]} opacity={0.7} />
-          </group>
-        );
-      })}
-
-      {/* Glowing Base Line */}
-      <mesh position={[0, 0.25, 0.6]}>
-        <planeGeometry args={[arenaSize, 0.5]} />
-        <meshBasicMaterial color="#ff0055" toneMapped={false} />
-      </mesh>
-      {/* Glowing Top Line */}
-      <mesh position={[0, 11.75, 0.6]}>
-        <planeGeometry args={[arenaSize, 0.5]} />
-        <meshBasicMaterial color="#39ff14" toneMapped={false} />
-      </mesh>
-    </RigidBody>
-  );
-}
-
-// ---------------------------------------------------------
-// Main Arena Component
-// ---------------------------------------------------------
 export function Arena() {
   const isMobile = useIsMobile();
   const arenaSeed = useGameStore(state => state.arenaSeed);
   const levelConfig = useGameStore(state => state.levelConfig);
-  
   const obstacles = useMemo(() => getObstacles(isMobile, arenaSeed, levelConfig), [isMobile, arenaSeed, levelConfig]);
 
-  const boxObstacles = useMemo(() => obstacles.filter(obs => obs && obs.type === 'box'), [obstacles]);
-  const cylinderObstacles = useMemo(() => obstacles.filter(obs => obs && obs.type === 'cylinder'), [obstacles]);
+  // Pre-calculate instances to reduce draw calls
+  const { boxData, cylinderData, graffitis } = useMemo(() => {
+    const boxes: any[] = [];
+    const cylinders: any[] = [];
+    const graffitisData: any[] = [];
 
-  const boxInstances = useMemo(() => {
-    return boxObstacles.map((obs, i) => ({
-      key: `box-${i}-${obs.position[0]}-${obs.position[2]}`,
-      position: [obs.position[0], obs.size[1] / 2, obs.position[2]] as [number, number, number],
-      rotation: [obs.rotation[0], obs.rotation[1], obs.rotation[2]] as [number, number, number],
-      scale: [obs.size[0], obs.size[1], obs.size[2]] as [number, number, number]
-    }));
-  }, [boxObstacles]);
+    obstacles.forEach((obs, i) => {
+      if (!obs) return;
+      
+      const euler = new THREE.Euler(obs.rotation[0], obs.rotation[1], obs.rotation[2]);
+      const quaternion = new THREE.Quaternion().setFromEuler(euler);
 
-  const cylInstances = useMemo(() => {
-    return cylinderObstacles.map((obs, i) => ({
-      key: `cyl-${i}-${obs.position[0]}-${obs.position[2]}`,
-      position: [obs.position[0], obs.size[1] / 2, obs.position[2]] as [number, number, number],
-      rotation: [obs.rotation[0], obs.rotation[1], obs.rotation[2]] as [number, number, number],
-      scale: [obs.size[0], obs.size[1], obs.size[0]] as [number, number, number]
-    }));
-  }, [cylinderObstacles]);
+      if (obs.type === 'box') {
+        boxes.push({
+          key: `box-${i}`,
+          position: [obs.position[0], obs.size[1] / 2, obs.position[2]] as [number, number, number],
+          rotation: [quaternion.x, quaternion.y, quaternion.z, quaternion.w],
+          scale: obs.size as [number, number, number],
+          userData: { color: obs.color, size: obs.size }
+        });
+
+        if (obs.graffitiType) {
+          graffitisData.push({ type: obs.graffitiType, size: obs.size, position: obs.position, rotation: obs.rotation });
+        }
+      } else {
+        cylinders.push({
+          key: `cyl-${i}`,
+          position: [obs.position[0], obs.size[1] / 2, obs.position[2]] as [number, number, number],
+          rotation: [quaternion.x, quaternion.y, quaternion.z, quaternion.w],
+          scale: [obs.size[0], obs.size[1], obs.size[0]], 
+          userData: { color: obs.color, size: obs.size }
+        });
+      }
+    });
+
+    return { boxData: boxes, cylinderData: cylinders, graffitis: graffitisData };
+  }, [obstacles]);
 
   const boxMeshRef = useRef<THREE.InstancedMesh>(null);
-  const boxCapRef = useRef<THREE.InstancedMesh>(null);
-  const boxBaseRef = useRef<THREE.InstancedMesh>(null);
-  const boxConduitRef = useRef<THREE.InstancedMesh>(null);
-
+  const boxTrimRef = useRef<THREE.InstancedMesh>(null);
   const cylMeshRef = useRef<THREE.InstancedMesh>(null);
-  const cylCapRef = useRef<THREE.InstancedMesh>(null);
-  const cylBaseRef = useRef<THREE.InstancedMesh>(null);
-  const cylConduitRef = useRef<THREE.InstancedMesh>(null);
+  const cylTrimRef = useRef<THREE.InstancedMesh>(null);
 
   useEffect(() => {
-    const tempObj = new THREE.Object3D();
+    const tempColor = new THREE.Color();
+    const tempMatrix = new THREE.Matrix4();
+    const tempPosition = new THREE.Vector3();
+    const tempRotation = new THREE.Quaternion();
+    const tempScale = new THREE.Vector3();
 
-    // 1. Setup Box Trim Instances
-    if (boxCapRef.current && boxBaseRef.current) {
-      let boxIdx = 0;
-      let conduitIdx = 0;
-      const conduitTransforms: { pos: THREE.Vector3; scale: THREE.Vector3; color: string }[] = [];
+    if (boxMeshRef.current && boxTrimRef.current) {
+      boxData.forEach((data, i) => {
+        tempColor.set((data.userData as any).color);
+        boxTrimRef.current!.setColorAt(i, tempColor);
 
-      boxObstacles.forEach((obs) => {
-        // Set rotation for trims
-        tempObj.rotation.set(obs.rotation[0], obs.rotation[1], obs.rotation[2]);
-
-        // Cap Trim
-        tempObj.position.set(obs.position[0], obs.size[1] - 0.1, obs.position[2]);
-        tempObj.scale.set(obs.size[0] + 0.05, 0.2, obs.size[2] + 0.05);
-        tempObj.updateMatrix();
-        boxCapRef.current!.setMatrixAt(boxIdx, tempObj.matrix);
-        boxCapRef.current!.setColorAt(boxIdx, new THREE.Color(obs.color));
-
-        // Base Trim
-        tempObj.position.set(obs.position[0], 0.1, obs.position[2]);
-        tempObj.scale.set(obs.size[0] + 0.05, 0.2, obs.size[2] + 0.05);
-        tempObj.updateMatrix();
-        boxBaseRef.current!.setMatrixAt(boxIdx, tempObj.matrix);
-        boxBaseRef.current!.setColorAt(boxIdx, new THREE.Color(obs.color));
-
-        boxIdx++;
-
-        // Box corner conduits for tall boxes
-        if (obs.size[1] > 6) {
-          const wHalf = obs.size[0] / 2;
-          const dHalf = obs.size[2] / 2;
-          const h = obs.size[1];
-          const corners = [
-            [wHalf + 0.02, dHalf + 0.02],
-            [-wHalf - 0.02, dHalf + 0.02],
-            [wHalf + 0.02, -dHalf - 0.02],
-            [-wHalf - 0.02, -dHalf - 0.02],
-          ];
-
-          corners.forEach(([lx, lz]) => {
-            const theta = obs.rotation[1];
-            const gx = lx * Math.cos(theta) - lz * Math.sin(theta);
-            const gz = lx * Math.sin(theta) + lz * Math.cos(theta);
-
-            conduitTransforms.push({
-              pos: new THREE.Vector3(obs.position[0] + gx, h / 2, obs.position[2] + gz),
-              scale: new THREE.Vector3(0.04, h, 0.04),
-              color: obs.color
-            });
-          });
-        }
+        // Position trim near the top of the box
+        tempPosition.fromArray(data.position as [number, number, number]);
+        const size = (data.userData as any).size;
+        tempPosition.y += (size[1] / 2) - 0.1; // Top offset
+        tempRotation.fromArray(data.rotation as any);
+        tempScale.set(size[0] + 0.05, 0.2, size[2] + 0.05);
+        
+        tempMatrix.compose(tempPosition, tempRotation, tempScale);
+        boxTrimRef.current!.setMatrixAt(i, tempMatrix);
       });
-
-      boxCapRef.current.count = boxObstacles.length;
-      boxCapRef.current.instanceMatrix.needsUpdate = true;
-      if (boxCapRef.current.instanceColor) boxCapRef.current.instanceColor.needsUpdate = true;
-
-      boxBaseRef.current.count = boxObstacles.length;
-      boxBaseRef.current.instanceMatrix.needsUpdate = true;
-      if (boxBaseRef.current.instanceColor) boxBaseRef.current.instanceColor.needsUpdate = true;
-
-      if (boxConduitRef.current) {
-        conduitTransforms.forEach((cond) => {
-          tempObj.position.copy(cond.pos);
-          tempObj.rotation.set(0, 0, 0);
-          tempObj.scale.set(0.08, cond.scale.y, 0.08);
-          tempObj.updateMatrix();
-          boxConduitRef.current!.setMatrixAt(conduitIdx, tempObj.matrix);
-          boxConduitRef.current!.setColorAt(conduitIdx, new THREE.Color(cond.color));
-          conduitIdx++;
-        });
-
-        boxConduitRef.current.count = conduitTransforms.length;
-        boxConduitRef.current.instanceMatrix.needsUpdate = true;
-        if (boxConduitRef.current.instanceColor) boxConduitRef.current.instanceColor.needsUpdate = true;
-      }
+      boxTrimRef.current.instanceColor!.needsUpdate = true;
+      boxTrimRef.current.instanceMatrix.needsUpdate = true;
     }
 
-    // 2. Setup Cylinder Trim Instances
-    if (cylCapRef.current && cylBaseRef.current) {
-      let cylIdx = 0;
-      let cylConduitIdx = 0;
-      const cylConduitTransforms: { pos: THREE.Vector3; scale: THREE.Vector3; color: string }[] = [];
+    if (cylMeshRef.current && cylTrimRef.current) {
+      cylinderData.forEach((data, i) => {
+        tempColor.set((data.userData as any).color);
+        cylTrimRef.current!.setColorAt(i, tempColor);
 
-      cylinderObstacles.forEach((obs) => {
-        // Set rotation for trims
-        tempObj.rotation.set(obs.rotation[0], obs.rotation[1], obs.rotation[2]);
-
-        // Cap Trim
-        tempObj.position.set(obs.position[0], obs.size[1] - 0.1, obs.position[2]);
-        tempObj.scale.set(obs.size[0] + 0.05, 0.2, obs.size[0] + 0.05);
-        tempObj.updateMatrix();
-        cylCapRef.current!.setMatrixAt(cylIdx, tempObj.matrix);
-        cylCapRef.current!.setColorAt(cylIdx, new THREE.Color(obs.color));
-
-        // Base Trim
-        tempObj.position.set(obs.position[0], 0.1, obs.position[2]);
-        tempObj.scale.set(obs.size[0] + 0.05, 0.2, obs.size[0] + 0.05);
-        tempObj.updateMatrix();
-        cylBaseRef.current!.setMatrixAt(cylIdx, tempObj.matrix);
-        cylBaseRef.current!.setColorAt(cylIdx, new THREE.Color(obs.color));
-
-        cylIdx++;
-
-        // Circumference conduits
-        if (obs.size[1] > 6) {
-          const r = obs.size[0] / 2 + 0.02;
-          const h = obs.size[1];
-          const angles = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
-
-          angles.forEach((angle) => {
-            cylConduitTransforms.push({
-              pos: new THREE.Vector3(
-                obs.position[0] + r * Math.cos(angle),
-                h / 2,
-                obs.position[2] + r * Math.sin(angle)
-              ),
-              scale: new THREE.Vector3(0.04, h, 0.04),
-              color: obs.color
-            });
-          });
-        }
+        tempPosition.fromArray(data.position as [number, number, number]);
+        const size = (data.userData as any).size;
+        tempPosition.y += (size[1] / 2) - 0.1; // Top offset
+        tempRotation.fromArray(data.rotation as any);
+        tempScale.set(size[0] + 0.05, 0.2, size[0] + 0.05);
+        
+        tempMatrix.compose(tempPosition, tempRotation, tempScale);
+        cylTrimRef.current!.setMatrixAt(i, tempMatrix);
       });
-
-      cylCapRef.current.count = cylinderObstacles.length;
-      cylCapRef.current.instanceMatrix.needsUpdate = true;
-      if (cylCapRef.current.instanceColor) cylCapRef.current.instanceColor.needsUpdate = true;
-
-      cylBaseRef.current.count = cylinderObstacles.length;
-      cylBaseRef.current.instanceMatrix.needsUpdate = true;
-      if (cylBaseRef.current.instanceColor) cylBaseRef.current.instanceColor.needsUpdate = true;
-
-      if (cylConduitRef.current) {
-        cylConduitTransforms.forEach((cond) => {
-          tempObj.position.copy(cond.pos);
-          tempObj.rotation.set(0, 0, 0);
-          tempObj.scale.set(0.08, cond.scale.y, 0.08);
-          tempObj.updateMatrix();
-          cylConduitRef.current!.setMatrixAt(cylConduitIdx, tempObj.matrix);
-          cylConduitRef.current!.setColorAt(cylConduitIdx, new THREE.Color(cond.color));
-          cylConduitIdx++;
-        });
-
-        cylConduitRef.current.count = cylConduitTransforms.length;
-        cylConduitRef.current.instanceMatrix.needsUpdate = true;
-        if (cylConduitRef.current.instanceColor) cylConduitRef.current.instanceColor.needsUpdate = true;
-      }
+      cylTrimRef.current.instanceColor!.needsUpdate = true;
+      cylTrimRef.current.instanceMatrix.needsUpdate = true;
     }
-  }, [boxObstacles, cylinderObstacles]);
+  }, [boxData, cylinderData]);
 
-  const halfSize = levelConfig.arenaSize / 2;
   const size = levelConfig.arenaSize;
+  const halfSize = size / 2;
 
   return (
     <group>
@@ -455,73 +236,118 @@ export function Arena() {
         </group>
       </RigidBody>
 
-      {/* Boundary Walls */}
-      <Wall name="wall-n" position={[0, 0, -halfSize]} rotation={[0, 0, 0]} isMobile={isMobile} arenaSize={size} graffiti={['neon_bolt', 'om', 'neon_gun', 'tag1', 'neon_eye']} />
-      <Wall name="wall-s" position={[0, 0, halfSize]} rotation={[0, Math.PI, 0]} isMobile={isMobile} arenaSize={size} graffiti={['neon_grid', 'chakra', 'neon_skull', 'tag2', 'cyber']} />
-      <Wall name="wall-e" position={[halfSize, 0, 0]} rotation={[0, -Math.PI / 2, 0]} isMobile={isMobile} arenaSize={size} graffiti={['neon_eye', 'lotus', 'neon_bolt', 'hanuman', 'skull']} />
-      <Wall name="wall-w" position={[-halfSize, 0, 0]} rotation={[0, Math.PI / 2, 0]} isMobile={isMobile} arenaSize={size} graffiti={['neon_gun', 'shiva_eye', 'neon_grid', 'om', 'neon_skull']} />
+      {/* Main Walls with Thicker boundary wall colliders */}
+      <Wall name="wall-n" position={[0, 0, -halfSize]} rotation={[0, 0, 0]} arenaSize={size} />
+      <Wall name="wall-s" position={[0, 0, halfSize]} rotation={[0, Math.PI, 0]} arenaSize={size} />
+      <Wall name="wall-e" position={[halfSize, 0, 0]} rotation={[0, -Math.PI / 2, 0]} arenaSize={size} />
+      <Wall name="wall-w" position={[-halfSize, 0, 0]} rotation={[0, Math.PI / 2, 0]} arenaSize={size} />
 
-      {/* Instanced Box Obstacles wrapped in InstancedRigidBodies */}
-      {boxObstacles.length > 0 && (
-        <>
-          <InstancedRigidBodies instances={boxInstances} type="fixed" colliders="cuboid" ccd={true}>
-            <instancedMesh ref={boxMeshRef} args={[null, null, boxObstacles.length]} castShadow receiveShadow={!isMobile} frustumCulled={false}>
-              <boxGeometry args={[1, 1, 1]} />
-              <meshStandardMaterial color="#05050a" roughness={0.25} metalness={0.9} />
-            </instancedMesh>
-          </InstancedRigidBodies>
-          <instancedMesh ref={boxCapRef} args={[null, null, boxObstacles.length]} frustumCulled={false}>
+      {/* Instanced Boxes */}
+      {boxData.length > 0 && (
+        <InstancedRigidBodies instances={boxData} colliders="cuboid" type="fixed" ccd={true}>
+          <instancedMesh ref={boxMeshRef} args={[null, null, boxData.length]} receiveShadow={!isMobile} castShadow={!isMobile} frustumCulled={false}>
             <boxGeometry args={[1, 1, 1]} />
-            <meshBasicMaterial toneMapped={false} />
+            <meshStandardMaterial color="#05050a" roughness={0.25} metalness={0.9} />
           </instancedMesh>
-          <instancedMesh ref={boxBaseRef} args={[null, null, boxObstacles.length]} frustumCulled={false}>
-            <boxGeometry args={[1, 1, 1]} />
-            <meshBasicMaterial toneMapped={false} />
-          </instancedMesh>
-          <instancedMesh ref={boxConduitRef} args={[null, null, boxObstacles.length * 4]} frustumCulled={false}>
-            <cylinderGeometry args={[1, 1, 1, 8]} />
-            <meshBasicMaterial toneMapped={false} />
-          </instancedMesh>
-        </>
+        </InstancedRigidBodies>
       )}
 
-      {/* Instanced Cylinder Obstacles wrapped in InstancedRigidBodies */}
-      {cylinderObstacles.length > 0 && (
-        <>
-          <InstancedRigidBodies instances={cylInstances} type="fixed" colliders="hull" ccd={true}>
-            <instancedMesh ref={cylMeshRef} args={[null, null, cylinderObstacles.length]} castShadow receiveShadow={!isMobile} frustumCulled={false}>
-              <cylinderGeometry args={[0.5, 0.5, 1, 16]} />
-              <meshStandardMaterial color="#05050a" roughness={0.25} metalness={0.9} />
-            </instancedMesh>
-          </InstancedRigidBodies>
-          <instancedMesh ref={cylCapRef} args={[null, null, cylinderObstacles.length]} frustumCulled={false}>
-            <cylinderGeometry args={[0.5, 0.5, 1, 16]} />
-            <meshBasicMaterial toneMapped={false} />
-          </instancedMesh>
-          <instancedMesh ref={cylBaseRef} args={[null, null, cylinderObstacles.length]} frustumCulled={false}>
-            <cylinderGeometry args={[0.5, 0.5, 1, 16]} />
-            <meshBasicMaterial toneMapped={false} />
-          </instancedMesh>
-          <instancedMesh ref={cylConduitRef} args={[null, null, cylinderObstacles.length * 4]} frustumCulled={false}>
-            <cylinderGeometry args={[1, 1, 1, 8]} />
-            <meshBasicMaterial toneMapped={false} />
-          </instancedMesh>
-        </>
+      {/* Instanced Box Trims (Visual Only, No Physics) */}
+      {boxData.length > 0 && (
+        <instancedMesh ref={boxTrimRef} args={[null, null, boxData.length]} frustumCulled={false}>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshBasicMaterial toneMapped={false} />
+        </instancedMesh>
       )}
 
-      {/* Render local graffiti decals directly on the walls */}
-      {obstacles.map((obs, i) => {
-        if (!obs || !obs.graffitiType || obs.type !== 'box') return null;
-        return (
-          <group 
-            key={i} 
-            position={[obs.position[0], 0, obs.position[2]]}
-            rotation={obs.rotation as [number, number, number]}
-          >
-            <Graffiti type={obs.graffitiType} size={obs.size} />
-          </group>
-        );
-      })}
+      {/* Instanced Cylinders */}
+      {cylinderData.length > 0 && (
+        <InstancedRigidBodies instances={cylinderData} colliders="hull" type="fixed" ccd={true}>
+          <instancedMesh ref={cylMeshRef} args={[null, null, cylinderData.length]} receiveShadow={!isMobile} castShadow={!isMobile} frustumCulled={false}>
+            <cylinderGeometry args={[0.5, 0.5, 1, 16]} />
+            <meshStandardMaterial color="#05050a" roughness={0.25} metalness={0.9} />
+          </instancedMesh>
+        </InstancedRigidBodies>
+      )}
+
+      {/* Instanced Cylinder Trims (Visual Only, No Physics) */}
+      {cylinderData.length > 0 && (
+        <instancedMesh ref={cylTrimRef} args={[null, null, cylinderData.length]} frustumCulled={false}>
+          <cylinderGeometry args={[0.5, 0.5, 1, 16]} />
+          <meshBasicMaterial toneMapped={false} />
+        </instancedMesh>
+      )}
+
+      {/* WebGL Pure Texture Graffiti (No HTML DOM) */}
+      {graffitis.map((graf, i) => (
+        <WebGLGraffiti key={i} type={graf.type} size={graf.size} position={graf.position} rotation={graf.rotation} />
+      ))}
     </group>
+  );
+}
+
+// WebGL Graffiti Component using flat geometry and cached SVG base64 textures
+function WebGLGraffiti({ type, size, position, rotation }: { type: string, size: [number, number, number], position: [number, number, number], rotation: [number, number, number] }) {
+  const colors: Record<string, string> = {
+    bow: '#39ff14', om: '#39ff14', lotus: '#39ff14', shiva_eye: '#39ff14',
+    chakra: '#ff0055', trishula: '#ff0055', hanuman: '#ff0055',
+    tag1: '#00ffff', tag2: '#ffcc33', cyber: '#9013fe', skull: '#ffffff',
+    neon_bolt: '#ffff00', neon_eye: '#00ffff', neon_grid: '#ff00ff', neon_skull: '#ff5500', neon_gun: '#39ff14'
+  };
+  const color = colors[type] || '#ffffff';
+  const texture = useMemo(() => getGraffitiTexture(type, color), [type, color]);
+
+  const isWide = size[0] > size[2];
+  const sidePos = isWide ? [0, 0, size[2] / 2 + 0.02] : [size[0] / 2 + 0.02, 0, 0];
+  const sideRot = isWide ? [0, 0, 0] : [0, Math.PI / 2, 0];
+  const graffitiScale = Math.min(size[0], size[1], size[2], 8);
+
+  return (
+    <group position={position} rotation={rotation as [number, number, number]}>
+      {/* Front Face */}
+      <mesh position={sidePos as [number, number, number]} rotation={sideRot as [number, number, number]}>
+        <planeGeometry args={[graffitiScale, graffitiScale]} />
+        <meshBasicMaterial map={texture} transparent={true} opacity={0.7} toneMapped={false} />
+      </mesh>
+      {/* Back Face */}
+      <mesh 
+        position={[-sidePos[0], sidePos[1], -sidePos[2]] as [number, number, number]} 
+        rotation={[sideRot[0], sideRot[1] + Math.PI, sideRot[2]] as [number, number, number]}
+      >
+        <planeGeometry args={[graffitiScale, graffitiScale]} />
+        <meshBasicMaterial map={texture} transparent={true} opacity={0.7} toneMapped={false} />
+      </mesh>
+    </group>
+  );
+}
+
+function Wall({ name, position, rotation, arenaSize }: { name: string, position: [number, number, number], rotation: [number, number, number], arenaSize: number }) {
+  const wallHeight = 12;
+  const halfSize = arenaSize / 2;
+
+  return (
+    <RigidBody type="fixed" name={name} position={position} rotation={rotation} colliders={false} ccd={true}>
+      {/* Thicker 3-unit boundary collider positioned slightly back to prevent tunneling */}
+      <CuboidCollider args={[halfSize, wallHeight / 2, 1.5]} position={[0, wallHeight / 2, -1.0]} />
+      
+      <mesh position={[0, wallHeight / 2, 0]}>
+        <boxGeometry args={[arenaSize, wallHeight, 1]} />
+        <meshStandardMaterial color="#0a0a25" roughness={0.4} metalness={0.6} />
+      </mesh>
+      
+      <mesh position={[0, wallHeight / 2, 0.51]}>
+        <planeGeometry args={[arenaSize, wallHeight]} />
+        <meshStandardMaterial color="#1a1a3a" transparent opacity={0.3} roughness={0.2} />
+      </mesh>
+
+      <mesh position={[0, 0.25, 0.6]}>
+        <planeGeometry args={[arenaSize, 0.5]} />
+        <meshBasicMaterial color="#ff0055" toneMapped={false} />
+      </mesh>
+      <mesh position={[0, wallHeight - 0.25, 0.6]}>
+        <planeGeometry args={[arenaSize, 0.5]} />
+        <meshBasicMaterial color="#39ff14" toneMapped={false} />
+      </mesh>
+    </RigidBody>
   );
 }
