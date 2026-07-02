@@ -177,6 +177,7 @@ export interface Room {
   arenaSeed: number;
   status: 'waiting' | 'playing';
   obstacles?: ObstacleData[];
+  createdAt: number;
 }
 
 export interface IRoomManager {
@@ -216,7 +217,8 @@ export class InMemoryRoomManager implements IRoomManager {
       players: {},
       arenaSeed,
       status: 'waiting',
-      obstacles: getObstacles(false, arenaSeed, LEVELS[2])
+      obstacles: getObstacles(false, arenaSeed, LEVELS[2]),
+      createdAt: Date.now()
     };
     this.rooms.set(roomId, room);
     return room;
@@ -313,14 +315,20 @@ export class InMemoryRoomManager implements IRoomManager {
     this.socketToRoom.delete(socketId);
   }
 
-  private cleanupStaleRooms(): void {
+  async cleanupStaleRoomsPublic(): Promise<void> {
+    const now = Date.now();
     for (const [roomId, room] of this.rooms.entries()) {
       const playerCount = Object.keys(room.players).length;
-      if (playerCount === 0) {
-        console.log(`[GC] Aggressively garbage collected empty room: ${roomId}`);
+      const isWaitingTooLong = room.status === 'waiting' && (now - room.createdAt > 30 * 60 * 1000);
+      if (playerCount === 0 || isWaitingTooLong) {
+        console.log(`[GC] Forcefully garbage collected room: ${roomId} (players=${playerCount}, waitingTooLong=${isWaitingTooLong})`);
         this.rooms.delete(roomId);
       }
     }
+  }
+
+  private cleanupStaleRooms(): void {
+    this.cleanupStaleRoomsPublic();
   }
 }
 
@@ -635,6 +643,13 @@ async function startServer() {
         }
       }
     });
+
+    // Room Garbage Collector: Runs every 5 minutes to forcefully clean empty or stale waiting rooms (> 30 mins)
+    setInterval(async () => {
+      if (roomManager instanceof InMemoryRoomManager) {
+        await roomManager.cleanupStaleRoomsPublic();
+      }
+    }, 5 * 60 * 1000);
   });
 
   // Vite middleware for development

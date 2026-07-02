@@ -795,8 +795,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   }),
 
   cleanupEffects: (time) => set((state) => {
-  const lasers = state.lasers.filter(l => time - l.timestamp < 50); // Lasers last 50ms (quick flash)
-    const particles = state.particles.filter(p => time - p.timestamp < 500); // Particles last 500ms
+    const lasers = state.lasers.filter(l => time - l.timestamp < 80); // Lasers last 80ms (quick flash)
+    const particles = state.particles.filter(p => time - p.timestamp < 400); // Particles last 400ms (aggressively cleaned)
     const events = state.events.filter(e => time - e.timestamp < 5000); // Events last 5s
     if (lasers.length !== state.lasers.length || particles.length !== state.particles.length || events.length !== state.events.length) {
       return { lasers, particles, events };

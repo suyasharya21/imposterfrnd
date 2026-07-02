@@ -100,15 +100,16 @@ function getGraffitiTexture(type: string, color: string): THREE.Texture {
 
   const svgContent = getGraffitiSvgContent(type);
   const svgString = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30" width="256" height="256" style="color: ${color}">${svgContent}</svg>`;
-  const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
+  
+  // Convert SVG string to Base64 Data URI
+  const base64Content = window.btoa(unescape(encodeURIComponent(svgString)));
+  const dataUri = `data:image/svg+xml;base64,${base64Content}`;
   
   const img = new Image();
   const texture = new THREE.Texture(img);
-  img.src = url;
+  img.src = dataUri;
   img.onload = () => {
     texture.needsUpdate = true;
-    URL.revokeObjectURL(url);
   };
   
   texture.minFilter = THREE.LinearMipmapLinearFilter;
