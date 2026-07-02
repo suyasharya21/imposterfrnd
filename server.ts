@@ -170,7 +170,7 @@ export interface Player {
   disabledUntil: number;
   score: number;
   color: string;
-  lastUpdateTime: number;
+  lastTimestamp: number;
   lastShootTime: number;
 }
 
@@ -450,7 +450,7 @@ async function startServer() {
         disabledUntil: 0,
         score: 0,
         color,
-        lastUpdateTime: Date.now(),
+        lastTimestamp: Date.now(),
         lastShootTime: 0
       };
 
@@ -529,7 +529,7 @@ async function startServer() {
         if (isRespawning) {
           player.state = 'active';
           player.disabledUntil = 0;
-          player.lastUpdateTime = now;
+          player.lastTimestamp = now;
           player.position = data.position;
           await roomManager.updatePlayerState(roomId, socket.id, 'active', 0);
           await roomManager.updatePlayerPosition(roomId, socket.id, data.position, data.rotation);
@@ -537,7 +537,7 @@ async function startServer() {
           return;
         }
 
-        const timeDelta = now - player.lastUpdateTime;
+        const timeDelta = now - player.lastTimestamp;
         
         // Calculate 3D distance
         const dx = data.position[0] - player.position[0];
@@ -560,7 +560,7 @@ async function startServer() {
 
         player.position = data.position;
         player.rotation = data.rotation;
-        player.lastUpdateTime = now;
+        player.lastTimestamp = now;
 
         await roomManager.updatePlayerPosition(roomId, socket.id, data.position, data.rotation);
         socket.to(roomId).emit('playerMoved', { id: socket.id, ...data });
