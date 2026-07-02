@@ -9,6 +9,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import path from 'path';
 import { getObstacles, LEVELS, ObstacleData } from './src/constants';
+import RAPIER from '@dimforge/rapier3d-compat';
 
 // --- Anti-Cheat Math Helpers ---
 
@@ -169,6 +170,8 @@ export interface Player {
   disabledUntil: number;
   score: number;
   color: string;
+  lastUpdateTime: number;
+  lastShootTime: number;
 }
 
 export interface Room {
@@ -178,6 +181,7 @@ export interface Room {
   status: 'waiting' | 'playing';
   obstacles?: ObstacleData[];
   createdAt: number;
+  physicsWorld?: RAPIER.World;
 }
 
 export interface IRoomManager {
@@ -204,6 +208,15 @@ export class InMemoryRoomManager implements IRoomManager {
     setInterval(() => {
       this.cleanupStaleRooms();
     }, 60000);
+
+    // Step physics worlds at 15 ticks per second (approx 66ms)
+    setInterval(() => {
+      for (const room of this.rooms.values()) {
+        if (room.physicsWorld) {
+          room.physicsWorld.step();
+        }
+      }
+    }, 66);
   }
 
   async getRoom(roomId: string): Promise<Room | null> {
@@ -212,13 +225,21 @@ export class InMemoryRoomManager implements IRoomManager {
   }
 
   async createRoom(roomId: string, arenaSeed: number): Promise<Room> {
+    const gravity = { x: 0.0, y: -9.81, z: 0.0 };
+    const physicsWorld = new RAPIER.World(gravity);
+    const obstacles = getObstacles(false, arenaSeed, LEVELS[2]);
+    
+    // Build static colliders for obstacles and boundaries
+    generateServerArena(physicsWorld, obstacles, LEVELS[2].arenaSize);
+
     const room: Room = {
       id: roomId,
       players: {},
       arenaSeed,
       status: 'waiting',
-      obstacles: getObstacles(false, arenaSeed, LEVELS[2]),
-      createdAt: Date.now()
+      obstacles,
+      createdAt: Date.now(),
+      physicsWorld
     };
     this.rooms.set(roomId, room);
     return room;
@@ -332,7 +353,53 @@ export class InMemoryRoomManager implements IRoomManager {
   }
 }
 
+function generateServerArena(physicsWorld: RAPIER.World, obstacles: ObstacleData[], arenaSize: number) {
+  obstacles.forEach(obs => {
+    let colliderDesc;
+    if (obs.type === 'box') {
+      colliderDesc = RAPIER.ColliderDesc.cuboid(obs.size[0] / 2, obs.size[1] / 2, obs.size[2] / 2);
+    } else {
+      colliderDesc = RAPIER.ColliderDesc.cylinder(obs.size[1] / 2, obs.size[0] / 2);
+    }
+    
+    const rigidBodyDesc = RAPIER.RigidBodyDesc.fixed()
+      .setTranslation(obs.position[0], obs.position[1], obs.position[2]);
+    
+    if (obs.rotation[1] !== 0) {
+      const q = {
+        x: 0,
+        y: Math.sin(obs.rotation[1] / 2),
+        z: 0,
+        w: Math.cos(obs.rotation[1] / 2)
+      };
+      rigidBodyDesc.setRotation(q);
+    }
+    
+    const body = physicsWorld.createRigidBody(rigidBodyDesc);
+    physicsWorld.createCollider(colliderDesc, body);
+  });
+
+  // Add boundary walls
+  const halfSize = arenaSize / 2;
+  const wallHeight = 12;
+  const walls = [
+    { pos: [0, wallHeight / 2, -halfSize], size: [arenaSize, wallHeight, 3] },
+    { pos: [0, wallHeight / 2, halfSize], size: [arenaSize, wallHeight, 3] },
+    { pos: [halfSize, wallHeight / 2, 0], size: [3, wallHeight, arenaSize] },
+    { pos: [-halfSize, wallHeight / 2, 0], size: [3, wallHeight, arenaSize] }
+  ];
+
+  walls.forEach(wall => {
+    const rigidBodyDesc = RAPIER.RigidBodyDesc.fixed()
+      .setTranslation(wall.pos[0], wall.pos[1], wall.pos[2]);
+    const colliderDesc = RAPIER.ColliderDesc.cuboid(wall.size[0] / 2, wall.size[1] / 2, wall.size[2] / 2);
+    const body = physicsWorld.createRigidBody(rigidBodyDesc);
+    physicsWorld.createCollider(colliderDesc, body);
+  });
+}
+
 async function startServer() {
+  await RAPIER.init();
   const app = express();
   const PORT = 3000;
   const httpServer = createServer(app);
@@ -347,17 +414,6 @@ async function startServer() {
   const MIN_PLAYERS_TO_START = 3;
 
   const roomManager: IRoomManager = new InMemoryRoomManager();
-
-  // Anti-Cheat State Trackers
-  const lastShootTimeBySocket: Record<string, number> = {};
-
-  interface PlayerPositionData {
-    lastValidPosition: [number, number, number];
-    windowStartTime: number;
-    windowStartPos: [number, number, number];
-    lastUpdateTime: number;
-  }
-  const playerPositionTracker: Record<string, PlayerPositionData> = {};
 
   const generateRoomId = () => Math.random().toString(36).substring(2, 8).toUpperCase();
 
@@ -393,19 +449,13 @@ async function startServer() {
         state: 'active',
         disabledUntil: 0,
         score: 0,
-        color
+        color,
+        lastUpdateTime: Date.now(),
+        lastShootTime: 0
       };
 
       room = await roomManager.addPlayer(roomId, newPlayer);
       await roomManager.setRoomIdForSocket(socket.id, roomId);
-
-      // Initialize anti-cheat tracker for this player
-      playerPositionTracker[socket.id] = {
-        lastValidPosition: [spawnX, 0, spawnZ],
-        windowStartTime: Date.now(),
-        windowStartPos: [spawnX, 0, spawnZ],
-        lastUpdateTime: Date.now()
-      };
 
       socket.join(roomId);
 
@@ -473,81 +523,44 @@ async function startServer() {
 
         const now = Date.now();
         const player = room.players[socket.id];
-        const tracker = playerPositionTracker[socket.id];
         
         // If the player was disabled (dead), allow teleport and reactivate them
         const isRespawning = player.state === 'disabled';
         if (isRespawning) {
           player.state = 'active';
           player.disabledUntil = 0;
+          player.lastUpdateTime = now;
+          player.position = data.position;
           await roomManager.updatePlayerState(roomId, socket.id, 'active', 0);
+          await roomManager.updatePlayerPosition(roomId, socket.id, data.position, data.rotation);
+          socket.to(roomId).emit('playerMoved', { id: socket.id, ...data });
+          return;
+        }
+
+        const timeDelta = now - player.lastUpdateTime;
+        
+        // Calculate 3D distance
+        const dx = data.position[0] - player.position[0];
+        const dy = data.position[1] - player.position[1];
+        const dz = data.position[2] - player.position[2];
+        const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
+        
+        const MAX_ALLOWED_SPEED = 24; // units per second (slightly more than 20 to allow packet latency spikes)
+
+        // Ignore updates that are extremely close in time to prevent divide by zero
+        if (timeDelta > 10) {
+          const speed = distance / (timeDelta / 1000); // units per second
           
-          if (tracker) {
-            tracker.lastValidPosition = data.position;
-            tracker.windowStartTime = now;
-            tracker.windowStartPos = data.position;
-            tracker.lastUpdateTime = now;
-          }
-        }
-
-        if (!tracker) {
-          playerPositionTracker[socket.id] = {
-            lastValidPosition: data.position,
-            windowStartTime: now,
-            windowStartPos: data.position,
-            lastUpdateTime: now
-          };
-          await roomManager.updatePlayerPosition(roomId, socket.id, data.position, data.rotation);
-          socket.to(roomId).emit('playerMoved', { id: socket.id, ...data });
-          return;
-        }
-
-        // If respawning, skip anti-cheat checks for this single update
-        if (isRespawning) {
-          await roomManager.updatePlayerPosition(roomId, socket.id, data.position, data.rotation);
-          socket.to(roomId).emit('playerMoved', { id: socket.id, ...data });
-          return;
-        }
-
-        // 1. Teleport check: check distance from last valid pos
-        const lastPos = tracker.lastValidPosition;
-        const dx = data.position[0] - lastPos[0];
-        const dy = data.position[1] - lastPos[1];
-        const dz = data.position[2] - lastPos[2];
-        const distDelta = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-        if (distDelta > 40) {
-          console.log(`[Anti-Cheat] Teleport detected for player ${socket.id}: delta=${distDelta.toFixed(2)} units`);
-          socket.emit('forcePosition', { position: tracker.lastValidPosition });
-          return;
-        }
-
-        // 2. Speed hack check: check speed in sliding time windows (>= 150ms to account for packet jitter)
-        const timeElapsed = now - tracker.windowStartTime;
-        const dx_win = data.position[0] - tracker.windowStartPos[0];
-        const dy_win = data.position[1] - tracker.windowStartPos[1];
-        const dz_win = data.position[2] - tracker.windowStartPos[2];
-        const dist_win = Math.sqrt(dx_win * dx_win + dy_win * dy_win + dz_win * dz_win);
-
-        if (timeElapsed >= 150) {
-          const speed = dist_win / (timeElapsed / 1000); // units per second
-          if (speed > 26) {
-            console.log(`[Anti-Cheat] Speed hack detected for player ${socket.id}: speed=${speed.toFixed(2)} units/sec`);
-            socket.emit('forcePosition', { position: tracker.lastValidPosition });
-            
-            // Reset the window to prevent overflow / continuous check issues
-            tracker.windowStartTime = now;
-            tracker.windowStartPos = tracker.lastValidPosition;
+          if (speed > MAX_ALLOWED_SPEED) {
+            console.log(`[Anti-Cheat] Speed hack / Teleport detected for player ${socket.id}: speed=${speed.toFixed(2)} units/sec`);
+            socket.emit('forcePosition', { position: player.position });
             return;
-          } else {
-            tracker.windowStartTime = now;
-            tracker.windowStartPos = data.position;
           }
         }
 
-        // Update tracking state
-        tracker.lastValidPosition = data.position;
-        tracker.lastUpdateTime = now;
+        player.position = data.position;
+        player.rotation = data.rotation;
+        player.lastUpdateTime = now;
 
         await roomManager.updatePlayerPosition(roomId, socket.id, data.position, data.rotation);
         socket.to(roomId).emit('playerMoved', { id: socket.id, ...data });
@@ -557,15 +570,18 @@ async function startServer() {
     socket.on('shoot', async (data: { start: [number, number, number], end: [number, number, number], color: string }) => {
       const roomId = await roomManager.getRoomIdForSocket(socket.id);
       if (roomId) {
-        const now = Date.now();
-        const lastTime = lastShootTimeBySocket[socket.id] || 0;
+        const room = await roomManager.getRoom(roomId);
+        if (!room || !room.players[socket.id]) return;
 
-        if (now - lastTime < 150) {
+        const now = Date.now();
+        const shooter = room.players[socket.id];
+
+        if (now - shooter.lastShootTime < 150) {
           console.log(`[Anti-Cheat] Rate limit exceeded on shoot for player ${socket.id}`);
           return;
         }
 
-        lastShootTimeBySocket[socket.id] = now;
+        shooter.lastShootTime = now;
         socket.to(roomId).emit('playerShot', { id: socket.id, ...data });
       }
     });
@@ -580,50 +596,71 @@ async function startServer() {
         const target = room.players[targetId];
         const shooter = room.players[socket.id];
 
+        // 1. State Check: both shooter and target must be active
+        if (shooter.state !== 'active' || target.state !== 'active') {
+          console.log(`[Anti-Cheat] Hit rejected: state invalid (shooter=${shooter.state}, target=${target.state})`);
+          return;
+        }
+
+        // 2. Rate Limiting Check
+        if (now - shooter.lastShootTime < 150) {
+          console.log(`[Anti-Cheat] Hit rejected: rate limit exceeded for player ${socket.id}`);
+          return;
+        }
+
+        // 3. Distance Check
         const shooterPos = shooter.position;
         const targetPos = target.position;
-
-        // 1. Distance check
         const dx = targetPos[0] - shooterPos[0];
         const dy = targetPos[1] - shooterPos[1];
         const dz = targetPos[2] - shooterPos[2];
         const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const MAX_WEAPON_RANGE = 120;
 
-        if (dist > 105) {
-          console.log(`[Anti-Cheat] Hit rejected: shooter ${socket.id} distance to target ${targetId} too large (${dist.toFixed(2)} > 105)`);
+        if (dist > MAX_WEAPON_RANGE) {
+          console.log(`[Anti-Cheat] Hit rejected: shooter ${socket.id} distance to target ${targetId} too large (${dist.toFixed(2)} > ${MAX_WEAPON_RANGE})`);
           return;
         }
 
-        // 2. Wall obstruction check
-        const obstacles = room.obstacles || [];
-        if (isShotBlocked(shooterPos[0], shooterPos[2], targetPos[0], targetPos[2], obstacles)) {
-          console.log(`[Anti-Cheat] Hit rejected: shooter ${socket.id} fired through wall at target ${targetId}`);
-          return;
+        // 4. Server-side Rapier Raycast Obstacle Check
+        if (room.physicsWorld) {
+          const start = new RAPIER.Vector3(shooterPos[0], shooterPos[1] + 1.0, shooterPos[2]);
+          const end = new RAPIER.Vector3(targetPos[0], targetPos[1] + 1.0, targetPos[2]);
+          const dir = new RAPIER.Vector3(end.x - start.x, end.y - start.y, end.z - start.z);
+          const maxTOI = Math.sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+
+          if (maxTOI > 0.001) {
+            dir.x /= maxTOI;
+            dir.y /= maxTOI;
+            dir.z /= maxTOI;
+            const ray = new RAPIER.Ray(start, dir);
+            const hit = room.physicsWorld.castRay(ray, maxTOI, true);
+            if (hit) {
+              console.log(`[Anti-Cheat] Rapier Hit rejected: shooter ${socket.id} fired through obstacle at target ${targetId} (hit TOI=${hit.timeOfImpact.toFixed(2)})`);
+              return;
+            }
+          }
         }
 
-        if (target.state === 'active' || now > target.disabledUntil) {
-          const disabledUntil = now + 3000;
-          const newScore = shooter.score + 100;
+        const disabledUntil = now + 3000;
+        const newScore = shooter.score + 100;
 
-          await roomManager.updatePlayerState(roomId, targetId, 'disabled', disabledUntil);
-          await roomManager.updatePlayerScore(roomId, socket.id, newScore);
-          
-          io.to(roomId).emit('playerHit', {
-            targetId,
-            shooterId: socket.id,
-            targetDisabledUntil: disabledUntil,
-            shooterScore: newScore
-          });
-        }
+        shooter.lastShootTime = now;
+
+        await roomManager.updatePlayerState(roomId, targetId, 'disabled', disabledUntil);
+        await roomManager.updatePlayerScore(roomId, socket.id, newScore);
+        
+        io.to(roomId).emit('playerHit', {
+          targetId,
+          shooterId: socket.id,
+          targetDisabledUntil: disabledUntil,
+          shooterScore: newScore
+        });
       }
     });
 
     socket.on('disconnect', async () => {
       const roomId = await roomManager.getRoomIdForSocket(socket.id);
-      
-      // Cleanup trackers
-      delete lastShootTimeBySocket[socket.id];
-      delete playerPositionTracker[socket.id];
 
       if (roomId) {
         await roomManager.deleteSocketMapping(socket.id);
