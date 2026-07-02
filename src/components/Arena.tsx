@@ -175,6 +175,7 @@ export function Arena() {
     if (boxMeshRef.current && boxTrimRef.current) {
       boxData.forEach((data, i) => {
         tempColor.set((data.userData as any).color);
+        boxMeshRef.current!.setColorAt(i, tempColor);
         boxTrimRef.current!.setColorAt(i, tempColor);
 
         // Position trim near the top of the box
@@ -186,7 +187,16 @@ export function Arena() {
         
         tempMatrix.compose(tempPosition, tempRotation, tempScale);
         boxTrimRef.current!.setMatrixAt(i, tempMatrix);
+
+        // Manually set main box mesh matrices to resolve static instanced rigid body visibility desyncs
+        const boxPos = new THREE.Vector3().fromArray(data.position);
+        const boxRot = new THREE.Quaternion().fromArray(data.rotation);
+        const boxScale = new THREE.Vector3().fromArray(data.scale);
+        const boxMatrix = new THREE.Matrix4().compose(boxPos, boxRot, boxScale);
+        boxMeshRef.current!.setMatrixAt(i, boxMatrix);
       });
+      if (boxMeshRef.current.instanceColor) boxMeshRef.current.instanceColor.needsUpdate = true;
+      boxMeshRef.current.instanceMatrix.needsUpdate = true;
       boxTrimRef.current.instanceColor!.needsUpdate = true;
       boxTrimRef.current.instanceMatrix.needsUpdate = true;
     }
@@ -194,6 +204,7 @@ export function Arena() {
     if (cylMeshRef.current && cylTrimRef.current) {
       cylinderData.forEach((data, i) => {
         tempColor.set((data.userData as any).color);
+        cylMeshRef.current!.setColorAt(i, tempColor);
         cylTrimRef.current!.setColorAt(i, tempColor);
 
         tempPosition.fromArray(data.position as [number, number, number]);
@@ -204,7 +215,16 @@ export function Arena() {
         
         tempMatrix.compose(tempPosition, tempRotation, tempScale);
         cylTrimRef.current!.setMatrixAt(i, tempMatrix);
+
+        // Manually set main cylinder mesh matrices to resolve static instanced rigid body visibility desyncs
+        const cylPos = new THREE.Vector3().fromArray(data.position);
+        const cylRot = new THREE.Quaternion().fromArray(data.rotation);
+        const cylScale = new THREE.Vector3().fromArray(data.scale);
+        const cylMatrix = new THREE.Matrix4().compose(cylPos, cylRot, cylScale);
+        cylMeshRef.current!.setMatrixAt(i, cylMatrix);
       });
+      if (cylMeshRef.current.instanceColor) cylMeshRef.current.instanceColor.needsUpdate = true;
+      cylMeshRef.current.instanceMatrix.needsUpdate = true;
       cylTrimRef.current.instanceColor!.needsUpdate = true;
       cylTrimRef.current.instanceMatrix.needsUpdate = true;
     }
