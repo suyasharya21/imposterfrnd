@@ -53,15 +53,13 @@ export function Arena() {
       <Grid position={[0, 0.05, 0]} args={[200, 200]} cellColor="#ff0055" sectionColor="#39ff14" fadeDistance={120} cellThickness={0.5} sectionThickness={2} />
 
       {/* Ceiling / Roof Grid */}
-      <RigidBody type="fixed" name="ceiling">
-        <group position={[0, 20, 0]}>
-          <Grid args={[200, 200]} cellColor="#39ff14" sectionColor="#ff0055" fadeDistance={150} cellThickness={0.5} sectionThickness={1.5} rotation={[Math.PI, 0, 0]} />
-          <mesh rotation={[Math.PI / 2, 0, 0]}>
-            <planeGeometry args={[200, 200]} />
-            <meshStandardMaterial color="#000000" transparent opacity={0.4} roughness={1} />
-          </mesh>
-        </group>
-      </RigidBody>
+      <group position={[0, 20, 0]}>
+        <Grid args={[200, 200]} cellColor="#39ff14" sectionColor="#ff0055" fadeDistance={150} cellThickness={0.5} sectionThickness={1.5} rotation={[Math.PI, 0, 0]} />
+        <mesh rotation={[Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[200, 200]} />
+          <meshStandardMaterial color="#000000" transparent opacity={0.4} roughness={1} />
+        </mesh>
+      </group>
 
       {/* Walls */}
       <Wall name="wall-n" position={[0, 6, -100]} rotation={[0, 0, 0]} isMobile={isMobile} graffiti={['neon_bolt', 'om', 'neon_gun', 'tag1', 'neon_eye']} />
