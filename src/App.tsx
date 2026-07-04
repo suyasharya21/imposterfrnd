@@ -210,6 +210,7 @@ export default function App() {
   const isCursorLocked = useGameStore(state => state.isCursorLocked);
   const cpuLevel = useGameStore(state => state.cpuLevel);
   const enemies = useGameStore(state => state.enemies);
+  const cpuLevelCleared = useGameStore(state => state.cpuLevelCleared);
   
   const currentPlayerCount = Object.keys(otherPlayers).length + 1;
 
@@ -218,6 +219,12 @@ export default function App() {
   const [lockCooldown, setLockCooldown] = useState(false);
   const [menuView, setMenuView] = useState<'main' | 'join'>('main');
   const [joinInput, setJoinInput] = useState('');
+
+  useEffect(() => {
+    if (cpuLevelCleared && document.pointerLockElement) {
+      document.exitPointerLock();
+    }
+  }, [cpuLevelCleared]);
 
   useEffect(() => {
     const handlePointerLockChange = () => {
@@ -270,6 +277,48 @@ export default function App() {
       {/* Task & Voting Overlays */}
       <TaskOverlay />
       <VotingAndChatOverlay />
+
+      {/* Level Completed Overlay */}
+      {gameState === 'playing' && cpuLevelCleared && (
+        <div className="absolute inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center z-[180] pointer-events-auto text-center animate-in fade-in duration-300">
+          <div className="bg-[#050f05] border-2 border-yellow-400 p-8 rounded-xl shadow-[0_0_35px_rgba(234,179,8,0.3)] max-w-md w-full font-mono relative overflow-hidden flex flex-col gap-6">
+            <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(234,179,8,0.03)_50%,transparent_50%)] bg-[length:100%_4px] opacity-40" />
+            
+            <div className="flex flex-col items-center gap-2 border-b border-yellow-500/20 pb-4">
+              <span className="text-yellow-400 text-sm font-black tracking-widest uppercase animate-pulse">Level Complete</span>
+              <h2 className="text-emerald-400 text-3xl font-black uppercase tracking-tight">CONGRATULATIONS!</h2>
+            </div>
+            
+            <div className="text-lime-400 text-sm leading-relaxed text-left bg-black/60 p-4 rounded border border-yellow-500/20">
+              <p className="font-bold text-yellow-400 mb-2">&gt; SYSTEM REPORT:</p>
+              <p>&gt; Level {cpuLevel} cleared successfully.</p>
+              <p>&gt; Target bots eliminated: {cpuLevel + 2}</p>
+              <p>&gt; Ammunition reserves replenished.</p>
+              <p>&gt; Combat bonus: +1 structural integrity (Life).</p>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <button
+                onMouseDown={() => {
+                  useGameStore.getState().advanceCpuLevel();
+                }}
+                className="w-full py-4 bg-yellow-400 text-black font-black text-lg uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-[0_0_15px_rgba(234,179,8,0.4)]"
+              >
+                Continue to Level {cpuLevel + 1}
+              </button>
+              <button
+                onMouseDown={() => {
+                  useGameStore.getState().leaveGame();
+                  setMenuView('main');
+                }}
+                className="w-full py-3 bg-red-950/20 border border-red-500 text-red-500 font-bold uppercase tracking-wider hover:bg-red-500 hover:text-black transition-all"
+              >
+                Back to Main Menu
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* UI Overlay */}
       <div className="absolute inset-0 pointer-events-none z-[100]">

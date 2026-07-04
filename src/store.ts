@@ -91,6 +91,7 @@ interface GameStore {
   roomCode: string | null;
   gameMode: 'cpu' | 'online' | 'room' | null;
   cpuLevel: number;
+  cpuLevelCleared: boolean;
   otherPlayers: Record<string, PlayerData>;
   playerPosition: [number, number, number];
   playerRotation: number;
@@ -109,6 +110,7 @@ interface GameStore {
   joinRoom: (code: string) => void;
   endGame: () => void;
   leaveGame: () => void;
+  advanceCpuLevel: () => void;
   updateTime: (delta: number) => void;
   hitPlayer: (botId?: string) => void;
   hitEnemy: (id: string, damage: number, byPlayer?: boolean) => void;
@@ -181,6 +183,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   roomCode: null,
   gameMode: null,
   cpuLevel: 1,
+  cpuLevelCleared: false,
   otherPlayers: {},
   playerPosition: [0, 1, 0],
   playerRotation: 0,
@@ -248,6 +251,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         gameState: 'playing',
         gameMode: 'cpu',
         cpuLevel: 1,
+        cpuLevelCleared: false,
         isConnecting: false,
         roomCode: 'OFFLINE_OPS',
         timeLeft: 300,
@@ -729,34 +733,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
             timestamp: Date.now()
           }];
         } else {
-          const nextLevel = state.cpuLevel + 1;
-          const rng = mulberry32(state.arenaSeed + nextLevel);
-          const newLevelEnemies: EnemyData[] = Array.from({ length: nextLevel + 2 }).map((_, i) => {
-            let x, z;
-            do {
-              x = (rng() - 0.5) * 170;
-              z = (rng() - 0.5) * 170;
-            } while (Math.abs(x) < 20 && Math.abs(z) < 20);
-            
-            return {
-              id: `bot-${i + 1}`,
-              position: [x, 1, z],
-              state: 'active',
-              disabledUntil: 0,
-              score: 0,
-              health: 2
-            };
-          });
-
-          nextState.cpuLevel = nextLevel;
-          nextState.enemies = newLevelEnemies;
-          nextState.ammo = { gun: 100, pistol: 100, knife: Infinity };
-          nextState.lives = Math.min(5, state.lives + 1); // bonus life reward
-          nextState.events = [...nextState.events!, {
-            id: Math.random().toString(),
-            message: `LEVEL ${nextLevel} STARTED! Spawned ${nextLevel + 2} bots.`,
-            timestamp: Date.now()
-          }];
+          // Trigger congratulations modal and wait for user to continue
+          nextState.cpuLevelCleared = true;
+          sounds.playCollect();
         }
       }
     }
@@ -902,5 +881,42 @@ export const useGameStore = create<GameStore>((set, get) => ({
       socket.emit('updatePosition', { position, rotation });
     }
     set({ playerPosition: position, playerRotation: rotation });
-  }
+  },
+
+  advanceCpuLevel: () => set((state) => {
+    if (state.gameMode !== 'cpu' || !state.cpuLevelCleared) return state;
+
+    const nextLevel = state.cpuLevel + 1;
+    const rng = mulberry32(state.arenaSeed + nextLevel);
+    const newLevelEnemies: EnemyData[] = Array.from({ length: nextLevel + 2 }).map((_, i) => {
+      let x, z;
+      do {
+        x = (rng() - 0.5) * 170;
+        z = (rng() - 0.5) * 170;
+      } while (Math.abs(x) < 20 && Math.abs(z) < 20);
+
+      return {
+        id: `bot-${i + 1}`,
+        position: [x, 1, z],
+        state: 'active',
+        disabledUntil: 0,
+        score: 0,
+        health: 2
+      };
+    });
+
+    return {
+      cpuLevel: nextLevel,
+      cpuLevelCleared: false,
+      enemies: newLevelEnemies,
+      ammo: { gun: 100, pistol: 100, knife: Infinity },
+      lives: Math.min(5, state.lives + 1), // bonus life reward
+      forcedPosition: [0, 1, 0], // teleport player back to center spawn point
+      events: [...state.events, {
+        id: Math.random().toString(),
+        message: `LEVEL ${nextLevel} STARTED! Spawned ${nextLevel + 2} bots.`,
+        timestamp: Date.now()
+      }]
+    };
+  })
 }));
