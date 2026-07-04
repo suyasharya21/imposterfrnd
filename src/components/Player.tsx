@@ -202,7 +202,7 @@ export function Player() {
             if (role === 'imposter') {
               const socket = useGameStore.getState().socket;
               if (socket) {
-                socket.emit('playerKilled', name);
+                socket.emit('hitPlayer', name);
               }
             } else if (role !== 'crewmate') {
               hitEnemy(name, damage, true);
@@ -235,6 +235,12 @@ export function Player() {
 
   useFrame((_, delta) => {
     if (!body.current || gameState !== 'playing') return;
+
+    const forcedPosition = useGameStore.getState().forcedPosition;
+    if (forcedPosition) {
+      body.current.setTranslation({ x: forcedPosition[0], y: forcedPosition[1], z: forcedPosition[2] }, true);
+      useGameStore.setState({ forcedPosition: null });
+    }
 
     if (votingPhase || !isAlive) {
       body.current.setLinvel({ x: 0, y: 0, z: 0 }, true);

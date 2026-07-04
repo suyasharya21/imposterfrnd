@@ -1,15 +1,13 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
-*/
-
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import path from 'path';
+import RAPIER from '@dimforge/rapier3d-compat';
+import { getObstacles } from './src/constants';
 
 async function startServer() {
+  await RAPIER.init();
   const app = express();
   const PORT = 3000;
   const httpServer = createServer(app);
@@ -32,6 +30,10 @@ async function startServer() {
     role: 'crewmate' | 'imposter';
     isAlive: boolean;
     currentVote: string | null;
+    lastUpdateTime: number;
+    lastValidPosition: [number, number, number];
+    lastShootTime: number;
+    health: number;
   }
 
   interface Room {
@@ -43,6 +45,7 @@ async function startServer() {
     votingTimer: number;
     phase: 'waiting' | 'playing' | 'voting';
     tasks: Array<{ id: string, x: number, z: number }>;
+    physicsWorld?: any;
   }
 
   const MAX_ROOM_SIZE = 8;
@@ -225,7 +228,11 @@ async function startServer() {
         color,
         role: 'crewmate',
         isAlive: true,
-        currentVote: null
+        currentVote: null,
+        lastUpdateTime: Date.now(),
+        lastValidPosition: [0, 2, 0],
+        lastShootTime: 0,
+        health: 2
       };
 
       socketToRoom[socket.id] = roomId;
@@ -278,9 +285,53 @@ async function startServer() {
           });
         }
 
+        // Initialize server physics world
+        room.physicsWorld = generateServerArena(room.arenaSeed);
+
         io.to(roomId).emit('gameStart', { roles, tasks: room.tasks });
         startRoomInterval(roomId);
       }
+    };
+
+    const generateServerArena = (seed: number) => {
+      // Create a gravity-free 3D Rapier world
+      const world = new RAPIER.World({ x: 0.0, y: 0.0, z: 0.0 });
+      const obstacles = getObstacles(false, seed);
+
+      obstacles.forEach((obs, index) => {
+        let rigidBodyDesc = RAPIER.RigidBodyDesc.fixed()
+          .setTranslation(obs.position[0], obs.position[1], obs.position[2]);
+        if (obs.rotation[1] !== 0) {
+          // Represent y-axis rotation as a quaternion
+          const halfAngle = obs.rotation[1] / 2;
+          rigidBodyDesc.setRotation({ x: 0, y: Math.sin(halfAngle), z: 0, w: Math.cos(halfAngle) });
+        }
+        
+        let body = world.createRigidBody(rigidBodyDesc);
+        let colliderDesc;
+        if (obs.type === 'box') {
+          colliderDesc = RAPIER.ColliderDesc.cuboid(obs.size[0] / 2, obs.size[1] / 2, obs.size[2] / 2);
+        } else {
+          colliderDesc = RAPIER.ColliderDesc.cylinder(obs.size[1] / 2, obs.size[0] / 2);
+        }
+        world.createCollider(colliderDesc, body);
+      });
+
+      // Add boundary walls
+      // West Wall
+      let wBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(-100, 6, 0));
+      world.createCollider(RAPIER.ColliderDesc.cuboid(0.5, 6, 100), wBody);
+      // East Wall
+      let eBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(100, 6, 0));
+      world.createCollider(RAPIER.ColliderDesc.cuboid(0.5, 6, 100), eBody);
+      // North Wall
+      let nBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, 6, -100));
+      world.createCollider(RAPIER.ColliderDesc.cuboid(100, 6, 0.5), nBody);
+      // South Wall
+      let sBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, 6, 100));
+      world.createCollider(RAPIER.ColliderDesc.cuboid(100, 6, 0.5), sBody);
+
+      return world;
     };
 
     socket.on('createRoom', () => {
@@ -319,8 +370,26 @@ async function startServer() {
     socket.on('updatePosition', (data: { position: [number, number, number], rotation: number }) => {
       const roomId = socketToRoom[socket.id];
       if (roomId && rooms[roomId] && rooms[roomId].players[socket.id]) {
-        rooms[roomId].players[socket.id].position = data.position;
-        rooms[roomId].players[socket.id].rotation = data.rotation;
+        const player = rooms[roomId].players[socket.id];
+        const deltaTime = (Date.now() - player.lastUpdateTime) / 1000;
+        if (deltaTime === 0) return;
+
+        const dx = data.position[0] - player.lastValidPosition[0];
+        const dy = data.position[1] - player.lastValidPosition[1];
+        const dz = data.position[2] - player.lastValidPosition[2];
+        const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
+        const speed = distance / deltaTime;
+        const MAX_SPEED_TOLERANCE = 25;
+
+        if (speed > MAX_SPEED_TOLERANCE) {
+          socket.emit('forcePosition', player.lastValidPosition);
+          return;
+        }
+
+        player.lastValidPosition = data.position;
+        player.lastUpdateTime = Date.now();
+        player.position = data.position;
+        player.rotation = data.rotation;
         socket.to(roomId).emit('playerMoved', { id: socket.id, ...data });
       }
     });
@@ -335,34 +404,56 @@ async function startServer() {
     socket.on('hitPlayer', (targetId: string) => {
       const roomId = socketToRoom[socket.id];
       if (roomId && rooms[roomId] && rooms[roomId].players[targetId] && rooms[roomId].players[socket.id]) {
-        const now = Date.now();
-        const target = rooms[roomId].players[targetId];
-        const shooter = rooms[roomId].players[socket.id];
-
-        if (target.state === 'active' || now > target.disabledUntil) {
-          target.state = 'disabled';
-          target.disabledUntil = now + 3000;
-          shooter.score += 100;
-          
-          io.to(roomId).emit('playerHit', {
-            targetId,
-            shooterId: socket.id,
-            targetDisabledUntil: target.disabledUntil,
-            shooterScore: shooter.score
-          });
-        }
-      }
-    });
-
-    socket.on('playerKilled', (targetId: string) => {
-      const roomId = socketToRoom[socket.id];
-      if (roomId && rooms[roomId]) {
         const room = rooms[roomId];
         const shooter = room.players[socket.id];
         const target = room.players[targetId];
 
-        if (room.status === 'playing' && room.phase === 'playing' && shooter && target) {
-          if (shooter.role === 'imposter' && target.isAlive) {
+        // 1. Rate Limiting Check
+        const shootDelay = Date.now() - shooter.lastShootTime;
+        if (shootDelay < 200) {
+          return;
+        }
+        shooter.lastShootTime = Date.now();
+
+        // 2. State Check
+        if (!shooter.isAlive || !target.isAlive) {
+          return;
+        }
+
+        // 3. Distance Check
+        const dx = shooter.position[0] - target.position[0];
+        const dy = shooter.position[1] - target.position[1];
+        const dz = shooter.position[2] - target.position[2];
+        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const MAX_WEAPON_RANGE = 120;
+        if (distance > MAX_WEAPON_RANGE) {
+          return;
+        }
+
+        // 4. Line-of-Sight Check (Wallhack prevention)
+        if (room.physicsWorld) {
+          const origin = { x: shooter.position[0], y: shooter.position[1], z: shooter.position[2] };
+          const dirX = target.position[0] - shooter.position[0];
+          const dirY = target.position[1] - shooter.position[1];
+          const dirZ = target.position[2] - shooter.position[2];
+          const len = Math.sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
+          if (len > 0) {
+            const dir = { x: dirX / len, y: dirY / len, z: dirZ / len };
+            const ray = new RAPIER.Ray(origin, dir);
+            // Cast ray up to len - 0.2 to avoid floating-point/target self-collision inaccuracies
+            const hit = room.physicsWorld.castRay(ray, len - 0.2, true);
+            if (hit !== null) {
+              return;
+            }
+          }
+        }
+
+        // 5. Role and Health Check
+        if (shooter.role === 'imposter' && target.role === 'crewmate') {
+          target.health -= 1;
+
+          if (target.health <= 0) {
+            // Execute kill sequence
             target.isAlive = false;
             target.state = 'disabled';
             room.phase = 'voting';
@@ -380,6 +471,24 @@ async function startServer() {
             io.to(roomId).emit('triggerVotingPhase', {
               players: room.players,
               killedPlayerId: targetId
+            });
+          } else {
+            // First hit: play disabled visual effect and decrement player health
+            target.state = 'disabled';
+            target.disabledUntil = Date.now() + 1500;
+            shooter.score += 50;
+
+            io.to(roomId).emit('playerHit', {
+              targetId,
+              shooterId: socket.id,
+              targetDisabledUntil: target.disabledUntil,
+              shooterScore: shooter.score
+            });
+
+            io.to(roomId).emit('roomUpdate', {
+              players: room.players,
+              status: room.status,
+              playerCount: Object.keys(room.players).length
             });
           }
         }

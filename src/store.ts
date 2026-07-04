@@ -100,6 +100,7 @@ interface GameStore {
   isCursorLocked: boolean;
   isConnecting: boolean;
   error: string | null;
+  forcedPosition: [number, number, number] | null;
 
   timerInterval: NodeJS.Timeout | null;
   startGame: (mode: 'online' | 'cpu' | 'room', code?: string) => void;
@@ -173,6 +174,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   isDoingTask: false,
   currentTaskId: null,
   setIsDoingTask: (isDoingTask, taskId) => set({ isDoingTask, currentTaskId: taskId }),
+  forcedPosition: null,
 
   socket: null,
   roomCode: null,
@@ -400,6 +402,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
           otherPlayers: { ...state.otherPlayers, [player.id]: player },
           events: [...state.events, { id: Math.random().toString(), message: `${player.name} joined`, timestamp: Date.now() }]
         }));
+      });
+
+      newSocket.on('forcePosition', (pos: [number, number, number]) => {
+        set({ forcedPosition: pos });
       });
 
       newSocket.on('playerMoved', (data: { id: string, position: [number, number, number], rotation: number }) => {
