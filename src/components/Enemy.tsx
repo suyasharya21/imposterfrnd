@@ -10,11 +10,11 @@ import * as THREE from 'three';
 import { useGameStore, EnemyData } from '../store';
 import { Text, Float } from '@react-three/drei';
 
-const ENEMY_SPEED = 5.625;
+const ENEMY_SPEED = 6.75;
 const CHASE_DIST = 160;
 const SHOOT_DIST = 25;
-const SHOOT_COOLDOWN = 3000; 
-const AIM_TIME = 800; 
+const SHOOT_COOLDOWN = 2400; 
+const AIM_TIME = 640; 
 const BOT_FLOAT_HEIGHT = 1.0; 
 
 export function Enemy({ data }: { data: EnemyData }) {
@@ -388,12 +388,8 @@ export function Enemy({ data }: { data: EnemyData }) {
     // Apply movement
     const velocity = body.current.linvel();
     
-    // Improved hover logic
-    const heightDiff = targetHeight - pos.y;
-    // Higher restorative force, but very damped to keep it "smooth"
-    const hoverForce = heightDiff * 25.0; 
-    const damping = -velocity.y * 3.5;
-    let yVel = velocity.y + (hoverForce + damping) * delta;
+    // Direct proportional height controller for a smooth hover (no hopping)
+    let yVel = (targetHeight - pos.y) * 8.0;
 
     // Hard floor collision prevention - soft version
     if (pos.y < 0.2) {
@@ -439,7 +435,7 @@ export function Enemy({ data }: { data: EnemyData }) {
       type="dynamic"
       position={data.position}
       enabledRotations={[false, false, false]}
-      gravityScale={3}
+      gravityScale={0}
       linearDamping={1}
       friction={1}
       userData={{ name: data.state === 'active' ? data.id : 'dead-bot' }}
