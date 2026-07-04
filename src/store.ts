@@ -887,7 +887,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (state.gameMode !== 'cpu' || !state.cpuLevelCleared) return state;
 
     const nextLevel = state.cpuLevel + 1;
-    const rng = mulberry32(state.arenaSeed + nextLevel);
+    const nextSeed = Math.floor(Math.random() * 1000000);
+    const rng = mulberry32(nextSeed + nextLevel);
     const newLevelEnemies: EnemyData[] = Array.from({ length: nextLevel + 2 }).map((_, i) => {
       let x, z;
       do {
@@ -905,10 +906,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
       };
     });
 
+    const newCoins: CoinData[] = Array.from({ length: 25 }).map((_, i) => ({
+      id: `coin-init-${nextLevel}-${i}`,
+      position: [(rng() - 0.5) * 180, 1.2, (rng() - 0.5) * 180],
+      collected: false
+    }));
+
     return {
       cpuLevel: nextLevel,
       cpuLevelCleared: false,
+      arenaSeed: nextSeed,
       enemies: newLevelEnemies,
+      coins: newCoins,
       ammo: { gun: 100, pistol: 100, knife: Infinity },
       lives: Math.min(5, state.lives + 1), // bonus life reward
       forcedPosition: [0, 1, 0], // teleport player back to center spawn point

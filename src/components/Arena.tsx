@@ -72,7 +72,7 @@ export function Arena() {
         if (!obs) return null;
         return (
           <RigidBody 
-            key={i} 
+            key={`obstacle-${arenaSeed}-${i}`} 
             type="fixed" 
             colliders={false}
             name={`obstacle-${i}`}
