@@ -13,9 +13,9 @@ import { Text, Float } from '@react-three/drei';
 const ENEMY_SPEED = 6.75;
 const CHASE_DIST = 160;
 const SHOOT_DIST = 25;
-const SHOOT_COOLDOWN = 2400; 
-const AIM_TIME = 640; 
-const BOT_FLOAT_HEIGHT = 1.0; 
+const SHOOT_COOLDOWN = 3500; 
+const AIM_TIME = 1000; 
+const BOT_FLOAT_HEIGHT = 0.05; 
 
 export function Enemy({ data }: { data: EnemyData }) {
   const body = useRef<RapierRigidBody>(null);
@@ -392,14 +392,14 @@ export function Enemy({ data }: { data: EnemyData }) {
     let yVel = (targetHeight - pos.y) * 8.0;
 
     // Hard floor collision prevention - soft version
-    if (pos.y < 0.2) {
+    if (pos.y < 0.01) {
       if (pos.y < -1.0) {
         // Emergency teleport if fallen through ground
         body.current.setTranslation({ x: pos.x, y: 1.5, z: pos.z }, true);
         yVel = 0;
       } else {
         // Continuous smooth upward push instead of hard impulse
-        const pushUp = (0.2 - pos.y) * 40.0;
+        const pushUp = (0.01 - pos.y) * 40.0;
         yVel += pushUp * delta;
       }
     }
