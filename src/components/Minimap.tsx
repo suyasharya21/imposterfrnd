@@ -96,12 +96,16 @@ export function Minimap() {
             return (
               <div 
                 key={`obs-${i}`}
-                className={`absolute bg-lime-400/40 border border-lime-400/20 z-[1] ${isCylinder ? 'rounded-full' : ''}`}
+                className={`absolute z-[1] ${isCylinder ? 'rounded-full' : ''}`}
                 style={{ 
                   left: `${x + MAP_SIZE / 2}px`, 
                   top: `${z + MAP_SIZE / 2}px`,
                   width: `${w}px`,
                   height: `${isCylinder ? w : d}px`,
+                  backgroundColor: obs.color,
+                  opacity: 0.75,
+                  border: `1px solid ${obs.color}`,
+                  boxShadow: `0 0 6px ${obs.color}80`,
                   transform: `rotate(${-(obs.rotation[1] * 180) / Math.PI}deg) translate(-50%, -50%)`,
                 }}
               />
