@@ -69,7 +69,7 @@ export function Minimap() {
         }}
       >
         <div 
-          className="absolute inset-0 transition-transform duration-75 ease-out"
+          className="absolute inset-0"
           style={{ 
             transform: `translate(${-pX}px, ${-pZ}px)`,
           }}
@@ -196,7 +196,7 @@ export function Minimap() {
 
       {/* North Indicator (Rotating around the ring) */}
       <div 
-        className="absolute inset-0 pointer-events-none transition-transform duration-75 ease-out"
+        className="absolute inset-0 pointer-events-none"
         style={{ transform: `rotate(${mapRotationDeg}deg)` }}
       >
         <div className="absolute top-1 left-1/2 -translate-x-1/2 text-[8px] font-black text-white px-1 py-0.5 bg-red-600 border border-white/30 rounded-sm leading-none z-[60]">N</div>
