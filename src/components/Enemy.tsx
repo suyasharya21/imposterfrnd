@@ -444,7 +444,7 @@ export function Enemy({ data }: { data: EnemyData }) {
       <CapsuleCollider args={[0.5, 0.5]} position={[0, 1, 0]} />
       
       <group ref={groupRef}>
-        <Float speed={1.5} rotationIntensity={0.1} floatIntensity={0.2}>
+        <Float speed={0} rotationIntensity={0} floatIntensity={0}>
           {/* Main Bot Body */}
           <group position={[0, 0, 0]}>
             {/* Hover Base */}

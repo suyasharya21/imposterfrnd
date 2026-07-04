@@ -351,11 +351,9 @@ export function Player() {
       camera.rotation.x = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, camera.rotation.x));
     }
 
-    // Update camera position - strictly follow for FPS stability with very high smoothing only if needed
+    // Update camera position - strictly follow with zero lag for FPS stability and wall rendering synchronization
     const targetCamPos = new THREE.Vector3(pos.x, pos.y + 1.6, pos.z);
-    
-    // Using a slightly lower but more consistent follow for visual stability
-    camera.position.lerp(targetCamPos, 0.9);
+    camera.position.copy(targetCamPos);
 
     // Sync gun to camera with sway
     if (gunGroupRef.current) {
