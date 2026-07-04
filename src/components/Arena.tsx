@@ -37,7 +37,7 @@ export function Arena() {
   const isMobile = useIsMobile();
   const arenaSeed = useGameStore(state => state.arenaSeed);
   
-  const obstacles = useMemo(() => getObstacles(isMobile, arenaSeed), [isMobile, arenaSeed]);
+  const obstacles = useMemo(() => getObstacles(false, arenaSeed), [arenaSeed]);
 
   return (
     <group>

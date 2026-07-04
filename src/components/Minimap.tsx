@@ -23,7 +23,7 @@ export function Minimap() {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
   });
 
-  const obstacles = useMemo(() => getObstacles(isMobile, arenaSeed), [isMobile, arenaSeed]);
+  const obstacles = useMemo(() => getObstacles(false, arenaSeed), [arenaSeed]);
   const activeEnemies = useMemo(() => enemies.filter(e => e.state === 'active'), [enemies]);
 
   const ZOOM = 2.5; 

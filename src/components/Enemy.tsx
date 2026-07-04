@@ -95,12 +95,15 @@ export function Enemy({ data }: { data: EnemyData }) {
       return;
     }
 
-    if (body.current && body.current.bodyType() === rapier.RigidBodyType.Fixed && data.state === 'active') {
-       body.current.setBodyType(rapier.RigidBodyType.Dynamic, true);
-       if (groupRef.current) {
-         groupRef.current.rotation.x = 0;
-         groupRef.current.position.y = 0;
-       }
+    if (data.state === 'active') {
+      if (body.current && body.current.bodyType() === rapier.RigidBodyType.Fixed) {
+         body.current.setBodyType(rapier.RigidBodyType.Dynamic, true);
+      }
+      if (groupRef.current) {
+        groupRef.current.rotation.x = 0;
+        groupRef.current.rotation.z = 0;
+        groupRef.current.position.y = 0;
+      }
     }
 
     const pos = body.current.translation();
@@ -143,12 +146,8 @@ export function Enemy({ data }: { data: EnemyData }) {
       }
     }
     
-    // Sync position to store for minimap
-    const now = Date.now();
-    if (now - lastSyncTime.current > 100) {
-      useGameStore.getState().updateEnemyPosition(data.id, [pos.x, pos.y, pos.z]);
-      lastSyncTime.current = now;
-    }
+    // Sync position to store for minimap (real-time updates)
+    useGameStore.getState().updateEnemyPosition(data.id, [pos.x, pos.y, pos.z]);
 
     let closestTargetPos: THREE.Vector3 | null = null;
     let closestDist = CHASE_DIST;
