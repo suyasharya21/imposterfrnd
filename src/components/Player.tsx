@@ -52,7 +52,12 @@ export function Player() {
     currentWeapon,
     cycleWeapon,
     useAmmo,
-    addEvent
+    addEvent,
+    votingPhase,
+    isAlive,
+    role,
+    isDoingTask,
+    setIsDoingTask
   } = useGameStore(useShallow(state => ({
     playerState: state.playerState,
     gameState: state.gameState,
@@ -65,7 +70,12 @@ export function Player() {
     currentWeapon: state.currentWeapon,
     cycleWeapon: state.cycleWeapon,
     useAmmo: state.useAmmo,
-    addEvent: state.addEvent
+    addEvent: state.addEvent,
+    votingPhase: state.votingPhase,
+    isAlive: state.isAlive,
+    role: state.role,
+    isDoingTask: state.isDoingTask,
+    setIsDoingTask: state.setIsDoingTask
   })));
 
   const keys = useRef({ 
@@ -189,7 +199,14 @@ export function Player() {
           } 
           // Check if it's another player (socket ID)
           else if (name !== 'player' && useGameStore.getState().otherPlayers[name]) {
-            hitEnemy(name, damage, true);
+            if (role === 'imposter') {
+              const socket = useGameStore.getState().socket;
+              if (socket) {
+                socket.emit('playerKilled', name);
+              }
+            } else if (role !== 'crewmate') {
+              hitEnemy(name, damage, true);
+            }
           }
         }
       }
@@ -209,7 +226,7 @@ export function Player() {
       // Small visual flash for knife hit
       addLaser(startPos, endPos, particleColor);
     }
-  }, [gameState, playerState, camera, world, rapier, hitEnemy, addParticles, addLaser, currentWeapon]);
+  }, [gameState, playerState, camera, world, rapier, hitEnemy, addParticles, addLaser, currentWeapon, role]);
 
   // Use YXZ order for FPS-style rotation (Yaw then Pitch)
   useEffect(() => {
@@ -218,6 +235,11 @@ export function Player() {
 
   useFrame((_, delta) => {
     if (!body.current || gameState !== 'playing') return;
+
+    if (votingPhase || !isAlive) {
+      body.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      return;
+    }
 
     const now = Date.now();
     const pCamera = camera as THREE.PerspectiveCamera;
@@ -245,8 +267,14 @@ export function Player() {
     const joyMoveZ = -mobileInput.move.y;
     const joyMoveX = mobileInput.move.x;
 
-    const combinedMoveZ = (k.w || k.arrowup ? 1 : 0) - (k.s || k.arrowdown ? 1 : 0) + joyMoveZ;
-    const combinedMoveX = (k.d || k.arrowright ? 1 : 0) - (k.a || k.arrowleft ? 1 : 0) + joyMoveX;
+    const hasMovementInput = k.w || k.s || k.a || k.d || k.arrowup || k.arrowdown || k.arrowleft || k.arrowright || Math.abs(joyMoveX) > 0.1 || Math.abs(joyMoveZ) > 0.1;
+
+    if (isDoingTask && hasMovementInput) {
+      setIsDoingTask(false, null);
+    }
+
+    const combinedMoveZ = isDoingTask ? 0 : ((k.w || k.arrowup ? 1 : 0) - (k.s || k.arrowdown ? 1 : 0) + joyMoveZ);
+    const combinedMoveX = isDoingTask ? 0 : ((k.d || k.arrowright ? 1 : 0) - (k.a || k.arrowleft ? 1 : 0) + joyMoveX);
 
     const direction = new THREE.Vector3();
     direction.addScaledVector(forward, combinedMoveZ);
@@ -258,6 +286,18 @@ export function Player() {
     }
 
     const pos = body.current.translation();
+    const playerPosVec = new THREE.Vector3(pos.x, pos.y, pos.z);
+
+    if (role === 'crewmate' && !isDoingTask) {
+      const activeTasks = useGameStore.getState().tasks || [];
+      const closeTask = activeTasks.find(task => {
+        const taskPosVec = new THREE.Vector3(task.x, pos.y, task.z);
+        return playerPosVec.distanceTo(taskPosVec) < 1.5;
+      });
+      if (closeTask) {
+        setIsDoingTask(true, closeTask.id);
+      }
+    }
 
     // Grounded check (raycast down)
     const rayOrigin = { x: pos.x, y: pos.y + 0.1, z: pos.z };

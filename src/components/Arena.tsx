@@ -10,6 +10,7 @@ import { useMemo, useRef, useState, useEffect } from 'react';
 import * as THREE from 'three';
 import { getObstacles } from '../constants';
 import { useGameStore } from '../store';
+import { Tasks } from './Task';
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() => {
@@ -40,6 +41,7 @@ export function Arena() {
 
   return (
     <group>
+      <Tasks />
       {/* Floor */}
       <RigidBody type="fixed" name="floor" friction={1} colliders={false} ccd={true}>
         <mesh receiveShadow={!isMobile} position={[0, -0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>

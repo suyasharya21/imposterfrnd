@@ -29,6 +29,9 @@ export function Enemy({ data }: { data: EnemyData }) {
   const hitPlayer = useGameStore(state => state.hitPlayer);
   const addLaser = useGameStore(state => state.addLaser);
   const addParticles = useGameStore(state => state.addParticles);
+  const votingPhase = useGameStore(state => state.votingPhase);
+  const isAlive = useGameStore(state => state.isAlive);
+  const role = useGameStore(state => state.role);
 
   const lastShootTime = useRef(0);
   const isAiming = useRef(false);
@@ -64,6 +67,11 @@ export function Enemy({ data }: { data: EnemyData }) {
     const fiberTime = state_fiber.clock.elapsedTime;
     
     if (!body.current || gameState !== 'playing') return;
+
+    if (votingPhase || !isAlive) {
+      body.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      return;
+    }
 
     if (data.state === 'disabled') {
       if (body.current) {
@@ -160,7 +168,7 @@ export function Enemy({ data }: { data: EnemyData }) {
       return true; // No hit means clear air? Or we hit the target itself
     };
 
-    if (playerState === 'active') {
+    if (playerState === 'active' && role !== 'imposter') {
       const pPos = new THREE.Vector3(playerPosition[0], pos.y, playerPosition[2]);
       const distToPlayer = currentPos.distanceTo(pPos);
       if (distToPlayer < closestDist && checkLoS(pPos)) {
@@ -171,7 +179,7 @@ export function Enemy({ data }: { data: EnemyData }) {
 
     // Check other players
     Object.values(otherPlayers).forEach(p => {
-      if (p.state === 'active') {
+      if (p.state === 'active' && p.role !== 'imposter') {
         const pPos = new THREE.Vector3(p.position[0], pos.y, p.position[2]);
         const dist = currentPos.distanceTo(pPos);
         if (dist < closestDist && checkLoS(pPos)) {

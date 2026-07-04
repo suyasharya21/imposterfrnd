@@ -32,6 +32,9 @@ export interface PlayerData {
   disabledUntil: number;
   score: number;
   color: string;
+  role?: 'crewmate' | 'imposter';
+  isAlive?: boolean;
+  currentVote?: string | null;
 }
 
 export interface LaserData {
@@ -73,6 +76,16 @@ interface GameStore {
   events: GameEvent[];
   coins: CoinData[];
   
+  // Social Deduction
+  role: 'crewmate' | 'imposter' | null;
+  isAlive: boolean;
+  votingPhase: boolean;
+  tasks: Array<{ id: string, x: number, z: number }>;
+  chatHistory: Array<{ sender: string, message: string, timestamp: number }>;
+  isDoingTask: boolean;
+  currentTaskId: string | null;
+  setIsDoingTask: (isDoingTask: boolean, taskId: string | null) => void;
+
   // Multiplayer
   socket: Socket | null;
   roomCode: string | null;
@@ -151,6 +164,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
   events: [],
   coins: [],
   
+  // Social Deduction defaults
+  role: null,
+  isAlive: true,
+  votingPhase: false,
+  tasks: [],
+  chatHistory: [],
+  isDoingTask: false,
+  currentTaskId: null,
+  setIsDoingTask: (isDoingTask, taskId) => set({ isDoingTask, currentTaskId: taskId }),
+
   socket: null,
   roomCode: null,
   gameMode: null,
@@ -216,6 +239,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
         collected: false
       }));
 
+      const tasks: Array<{ id: string, x: number, z: number }> = Array.from({ length: 3 }).map((_, i) => ({
+        id: `task-cpu-${i}`,
+        x: (rng() - 0.5) * 140,
+        z: (rng() - 0.5) * 140
+      }));
+
       set({ 
         gameState: 'playing',
         gameMode: 'cpu',
@@ -229,6 +258,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
         lives: 5,
         ammo: { gun: 100, pistol: 100, knife: Infinity },
         otherPlayers: {},
+        role: 'crewmate',
+        isAlive: true,
+        votingPhase: false,
+        tasks,
+        chatHistory: [],
+        isDoingTask: false,
+        currentTaskId: null,
         timerInterval: setInterval(() => {
           get().updateTime(1);
         }, 1000)
@@ -277,24 +313,35 @@ export const useGameStore = create<GameStore>((set, get) => ({
         };
       });
 
+      const localPlayer = players[newSocket!.id!];
+
       set({ 
         otherPlayers,
         roomCode,
         gameMode: mode,
         isConnecting: false,
         gameState: status === 'waiting' ? 'waiting' : 'playing',
-        timeLeft: 150,
+        timeLeft: 1200,
         score: 0,
         arenaSeed,
         enemies,
         lives: 3,
-        ammo: { gun: 30, pistol: 20, knife: Infinity }
+        ammo: { gun: 30, pistol: 20, knife: Infinity },
+        role: localPlayer ? (localPlayer.role || 'crewmate') : 'crewmate',
+        isAlive: localPlayer ? (localPlayer.isAlive ?? true) : true,
+        votingPhase: false,
+        tasks: [],
+        chatHistory: [],
+        isDoingTask: false,
+        currentTaskId: null
       });
 
       if (status === 'playing') {
         set({
           timerInterval: setInterval(() => {
-            get().updateTime(1);
+            if (get().gameMode === 'cpu') {
+              get().updateTime(1);
+            }
           }, 1000)
         });
       }
@@ -303,17 +350,48 @@ export const useGameStore = create<GameStore>((set, get) => ({
     newSocket.on('roomUpdate', ({ players, status }: { players: Record<string, PlayerData>, status: 'waiting' | 'playing' }) => {
       const otherPlayers = { ...players };
       delete otherPlayers[newSocket!.id!];
+
+      const localPlayer = players[newSocket!.id!];
+      if (localPlayer) {
+        set({
+          isAlive: localPlayer.isAlive ?? get().isAlive,
+          role: localPlayer.role ?? get().role
+        });
+      }
+
       set({ otherPlayers });
     });
 
-    newSocket.on('gameStart', () => {
+    newSocket.on('gameStart', ({ roles, tasks }: { roles: Record<string, 'crewmate' | 'imposter'>, tasks: Array<{ id: string, x: number, z: number }> }) => {
+      const myId = newSocket!.id!;
+      const myRole = roles[myId] || 'crewmate';
+
+      const otherPlayers = { ...get().otherPlayers };
+      Object.keys(otherPlayers).forEach(id => {
+        if (roles[id]) {
+          otherPlayers[id].role = roles[id];
+          otherPlayers[id].isAlive = true;
+          otherPlayers[id].currentVote = null;
+        }
+      });
+
       set({ 
         gameState: 'playing',
+        role: myRole,
+        isAlive: true,
+        votingPhase: false,
+        tasks: tasks,
+        otherPlayers,
+        chatHistory: [],
+        isDoingTask: false,
+        currentTaskId: null,
         timerInterval: setInterval(() => {
-          get().updateTime(1);
+          if (get().gameMode === 'cpu') {
+            get().updateTime(1);
+          }
         }, 1000)
       });
-      sounds.playJoin(); // Use join sound as start sound?
+      sounds.playJoin();
     });
 
     newSocket.on('playerJoined', (player: PlayerData) => {
@@ -387,7 +465,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
             newState.score = data.shooterScore;
           }
 
-          // Update other players' states
           const players = { ...state.otherPlayers };
           let playersChanged = false;
 
@@ -428,6 +505,61 @@ export const useGameStore = create<GameStore>((set, get) => ({
           };
         });
       });
+
+      newSocket.on('timerUpdate', ({ roomTimer, votingTimer, phase }: { roomTimer: number, votingTimer: number, phase: 'waiting' | 'playing' | 'voting' }) => {
+        set({
+          timeLeft: phase === 'voting' ? votingTimer : roomTimer,
+          votingPhase: phase === 'voting'
+        });
+      });
+
+      newSocket.on('triggerVotingPhase', ({ players, killedPlayerId }: { players: Record<string, PlayerData>, killedPlayerId: string }) => {
+        const myId = newSocket!.id!;
+        const localPlayer = players[myId];
+        const otherPlayers = { ...players };
+        delete otherPlayers[myId];
+
+        set({
+          votingPhase: true,
+          otherPlayers,
+          isAlive: localPlayer ? (localPlayer.isAlive ?? true) : true,
+          chatHistory: [],
+          isDoingTask: false,
+          currentTaskId: null
+        });
+
+        sounds.playPlayerDisabled();
+        get().addEvent(`ALERT: Voting Phase Triggered! ${players[killedPlayerId]?.name || 'Someone'} was murdered.`);
+      });
+
+      newSocket.on('tasksUpdate', (tasks: Array<{ id: string, x: number, z: number }>) => {
+        set({ tasks });
+      });
+
+      newSocket.on('receiveChatMessage', (msg: { sender: string, message: string, timestamp: number }) => {
+        set(state => ({
+          chatHistory: [...state.chatHistory, msg]
+        }));
+      });
+
+      newSocket.on('gameOver', (data: { result: 'imposter_wins' | 'crewmates_win', reason?: string, name?: string }) => {
+        if (get().timerInterval) {
+          clearInterval(get().timerInterval!);
+        }
+        set({
+          gameState: 'gameover',
+          votingPhase: false,
+          timeLeft: 0,
+          isDoingTask: false,
+          currentTaskId: null,
+          events: [...get().events, {
+            id: Math.random().toString(),
+            message: data.result === 'crewmates_win' ? `CREWMATES WIN! Imposter ${data.name || ''} was ejected.` : `IMPOSTER WINS!`,
+            timestamp: Date.now()
+          }]
+        });
+      });
+
     set({ socket: newSocket });
   },
 
@@ -442,7 +574,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (timerInterval) {
       clearInterval(timerInterval);
     }
-    set({ gameState: 'gameover', socket: null, timerInterval: null });
+    set({ gameState: 'gameover', socket: null, timerInterval: null, votingPhase: false, isDoingTask: false, currentTaskId: null });
   },
 
   leaveGame: () => {
@@ -469,13 +601,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
       playerState: 'active',
       lives: 3,
       ammo: { gun: 30, pistol: 20, knife: Infinity },
+      role: null,
+      isAlive: true,
+      votingPhase: false,
+      tasks: [],
+      chatHistory: [],
+      isDoingTask: false,
+      currentTaskId: null
     });
   },
 
   updateTime: (delta) => set((state) => {
-    // Game NEVER pauses time, even if menu is open
-    // Only pause if game is not in 'playing' state
     if (state.gameState !== 'playing') return state;
+    if (state.gameMode !== 'cpu') return state; // Only tick locally if offline
     
     const newTime = state.timeLeft - delta;
     if (newTime <= 0) {

@@ -8,6 +8,8 @@ import { Game } from './components/Game';
 import { MobileControls } from './components/MobileControls';
 import { Minimap } from './components/Minimap';
 import { useGameStore } from './store';
+import { TaskOverlay } from './components/TaskOverlay';
+import { VotingAndChatOverlay } from './components/VotingAndChatOverlay';
 import { sounds } from './lib/sounds';
 import { Heart, ArrowLeft, Copy } from 'lucide-react';
 
@@ -248,6 +250,10 @@ export default function App() {
       <div className="absolute inset-0">
         <Game />
       </div>
+
+      {/* Task & Voting Overlays */}
+      <TaskOverlay />
+      <VotingAndChatOverlay />
 
       {/* UI Overlay */}
       <div className="absolute inset-0 pointer-events-none z-[100]">
