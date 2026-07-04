@@ -168,10 +168,34 @@ export function Enemy({ data }: { data: EnemyData }) {
       return true; // No hit means clear air? Or we hit the target itself
     };
 
+    const checkVisibility = (targetPos: THREE.Vector3, dist: number) => {
+      // Proximity alert: spot target instantly if very close (e.g. 6 meters)
+      if (dist < 6 && checkLoS(targetPos)) return true;
+      
+      // Field of view alert: spot target within 50 meters if in a 120-degree front cone
+      if (dist < 50 && groupRef.current) {
+        const facingDir = new THREE.Vector3(
+          Math.sin(groupRef.current.rotation.y),
+          0,
+          Math.cos(groupRef.current.rotation.y)
+        ).normalize();
+        
+        const toTarget = new THREE.Vector3().subVectors(targetPos, currentPos);
+        toTarget.y = 0;
+        toTarget.normalize();
+        
+        const dot = facingDir.dot(toTarget);
+        if (dot > 0.5 && checkLoS(targetPos)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
     if (playerState === 'active' && role !== 'imposter') {
       const pPos = new THREE.Vector3(playerPosition[0], pos.y, playerPosition[2]);
       const distToPlayer = currentPos.distanceTo(pPos);
-      if (distToPlayer < closestDist && checkLoS(pPos)) {
+      if (distToPlayer < closestDist && checkVisibility(pPos, distToPlayer)) {
         closestDist = distToPlayer;
         closestTargetPos = pPos;
       }
@@ -182,7 +206,7 @@ export function Enemy({ data }: { data: EnemyData }) {
       if (p.state === 'active' && p.role !== 'imposter') {
         const pPos = new THREE.Vector3(p.position[0], pos.y, p.position[2]);
         const dist = currentPos.distanceTo(pPos);
-        if (dist < closestDist && checkLoS(pPos)) {
+        if (dist < closestDist && checkVisibility(pPos, dist)) {
           closestDist = dist;
           closestTargetPos = pPos;
         }
