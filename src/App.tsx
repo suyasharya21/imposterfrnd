@@ -28,6 +28,8 @@ function HUD() {
   const isMobile = useIsMobile();
 
   const enemies = useGameStore(state => state.enemies);
+  const gameMode = useGameStore(state => state.gameMode);
+  const cpuLevel = useGameStore(state => state.cpuLevel);
 
   const leaderboard = useMemo(() => {
     const players = [
@@ -60,8 +62,20 @@ function HUD() {
 
       {/* HUD Left - Score & Leaderboard */}
       <div className="absolute top-2 left-2 md:top-4 md:left-4 flex flex-col gap-2 md:gap-4 pointer-events-none">
-        <div className="text-lime-400 text-lg md:text-2xl font-bold drop-shadow-[0_0_8px_rgba(163,230,53,0.8)]">
-          SCORE: {score.toString().padStart(4, '0')}
+        <div className="flex flex-col gap-0.5">
+          <div className="text-lime-400 text-lg md:text-2xl font-bold drop-shadow-[0_0_8px_rgba(163,230,53,0.8)]">
+            SCORE: {score.toString().padStart(4, '0')}
+          </div>
+          {gameMode === 'cpu' && (
+            <div className="flex flex-col mt-0.5">
+              <div className="text-yellow-400 text-sm md:text-lg font-black drop-shadow-[0_0_8px_rgba(250,204,21,0.8)] uppercase">
+                LEVEL: {cpuLevel}/10
+              </div>
+              <div className="text-lime-400/80 text-[10px] md:text-xs font-black uppercase">
+                BOTS LEFT: {enemies.filter(e => e.state === 'active').length}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="bg-black/40 border border-lime-400/30 p-2 md:p-3 rounded-lg flex flex-col gap-1 md:gap-2">
@@ -194,6 +208,8 @@ export default function App() {
   const isConnecting = useGameStore(state => state.isConnecting);
   const startGame = useGameStore(state => state.startGame);
   const isCursorLocked = useGameStore(state => state.isCursorLocked);
+  const cpuLevel = useGameStore(state => state.cpuLevel);
+  const enemies = useGameStore(state => state.enemies);
   
   const currentPlayerCount = Object.keys(otherPlayers).length + 1;
 
@@ -565,8 +581,14 @@ export default function App() {
 
       {gameState === 'gameover' && (
         <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-[200] pointer-events-auto backdrop-blur-xl text-center">
-          <h1 className="text-8xl font-black text-red-500 mb-4 drop-shadow-[0_0_30px_rgba(239,68,68,0.8)] tracking-tighter italic uppercase underline decoration-4 underline-offset-8">
-            {lives <= 0 ? 'TERMINATED' : 'LINK SEVERED'}
+          <h1 className={`text-5xl md:text-8xl font-black mb-4 tracking-tighter italic uppercase underline decoration-4 underline-offset-8 ${
+            gameMode === 'cpu' && cpuLevel >= 10 && enemies.every(e => e.state === 'disabled')
+              ? 'text-yellow-400 drop-shadow-[0_0_30px_rgba(250,204,21,0.8)]'
+              : 'text-red-500 drop-shadow-[0_0_30px_rgba(239,68,68,0.8)]'
+          }`}>
+            {gameMode === 'cpu' && cpuLevel >= 10 && enemies.every(e => e.state === 'disabled')
+              ? 'MISSION ACCOMPLISHED'
+              : (lives <= 0 ? 'TERMINATED' : 'LINK SEVERED')}
           </h1>
           <div className="text-4xl text-lime-400 mb-12 font-black tracking-tighter">
             COMBAT SCORE: {score}

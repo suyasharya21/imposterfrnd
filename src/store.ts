@@ -90,6 +90,7 @@ interface GameStore {
   socket: Socket | null;
   roomCode: string | null;
   gameMode: 'cpu' | 'online' | 'room' | null;
+  cpuLevel: number;
   otherPlayers: Record<string, PlayerData>;
   playerPosition: [number, number, number];
   playerRotation: number;
@@ -179,6 +180,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   socket: null,
   roomCode: null,
   gameMode: null,
+  cpuLevel: 1,
   otherPlayers: {},
   playerPosition: [0, 1, 0],
   playerRotation: 0,
@@ -218,7 +220,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (mode === 'cpu') {
       const arenaSeed = Math.floor(Math.random() * 1000000);
       const rng = mulberry32(arenaSeed + 1);
-      const enemies: EnemyData[] = Array.from({ length: 16 }).map((_, i) => {
+      // Level 1 starts with 3 bots
+      const enemies: EnemyData[] = Array.from({ length: 3 }).map((_, i) => {
         let x, z;
         do {
           x = (rng() - 0.5) * 170;
@@ -241,15 +244,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
         collected: false
       }));
 
-      const tasks: Array<{ id: string, x: number, z: number }> = Array.from({ length: 3 }).map((_, i) => ({
-        id: `task-cpu-${i}`,
-        x: (rng() - 0.5) * 140,
-        z: (rng() - 0.5) * 140
-      }));
-
       set({ 
         gameState: 'playing',
         gameMode: 'cpu',
+        cpuLevel: 1,
         isConnecting: false,
         roomCode: 'OFFLINE_OPS',
         timeLeft: 300,
@@ -263,7 +261,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         role: 'crewmate',
         isAlive: true,
         votingPhase: false,
-        tasks,
+        tasks: [],
         chatHistory: [],
         isDoingTask: false,
         currentTaskId: null,
@@ -710,7 +708,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       collected: false
     });
 
-    return {
+    const nextState: Partial<GameStore> = {
       enemies,
       coins: newCoins,
       events: [...state.events, { 
@@ -719,6 +717,51 @@ export const useGameStore = create<GameStore>((set, get) => ({
         timestamp: Date.now() 
       }]
     };
+
+    if (state.gameMode === 'cpu') {
+      const allEnemiesDead = enemies.every(e => e.state === 'disabled');
+      if (allEnemiesDead) {
+        if (state.cpuLevel >= 10) {
+          nextState.gameState = 'gameover';
+          nextState.events = [...nextState.events!, {
+            id: Math.random().toString(),
+            message: "VICTORY! You completed all 10 levels!",
+            timestamp: Date.now()
+          }];
+        } else {
+          const nextLevel = state.cpuLevel + 1;
+          const rng = mulberry32(state.arenaSeed + nextLevel);
+          const newLevelEnemies: EnemyData[] = Array.from({ length: nextLevel + 2 }).map((_, i) => {
+            let x, z;
+            do {
+              x = (rng() - 0.5) * 170;
+              z = (rng() - 0.5) * 170;
+            } while (Math.abs(x) < 20 && Math.abs(z) < 20);
+            
+            return {
+              id: `bot-${i + 1}`,
+              position: [x, 1, z],
+              state: 'active',
+              disabledUntil: 0,
+              score: 0,
+              health: 2
+            };
+          });
+
+          nextState.cpuLevel = nextLevel;
+          nextState.enemies = newLevelEnemies;
+          nextState.ammo = { gun: 100, pistol: 100, knife: Infinity };
+          nextState.lives = Math.min(5, state.lives + 1); // bonus life reward
+          nextState.events = [...nextState.events!, {
+            id: Math.random().toString(),
+            message: `LEVEL ${nextLevel} STARTED! Spawned ${nextLevel + 2} bots.`,
+            timestamp: Date.now()
+          }];
+        }
+      }
+    }
+
+    return nextState;
   }),
 
   collectCoin: (id, collectorId) => set((state) => {
