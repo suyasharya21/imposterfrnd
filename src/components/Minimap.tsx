@@ -102,7 +102,7 @@ export function Minimap() {
                   top: `${z + MAP_SIZE / 2}px`,
                   width: `${w}px`,
                   height: `${isCylinder ? w : d}px`,
-                  transform: `translate(-50%, -50%) rotate(${-(obs.rotation[1] * 180) / Math.PI}deg)`,
+                  transform: `rotate(${-(obs.rotation[1] * 180) / Math.PI}deg) translate(-50%, -50%)`,
                 }}
               />
             );
