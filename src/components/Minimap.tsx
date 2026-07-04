@@ -100,8 +100,8 @@ export function Minimap() {
                 style={{ 
                   left: `${x + MAP_SIZE / 2}px`, 
                   top: `${z + MAP_SIZE / 2}px`,
-                  width: `${Math.max(3, w)}px`,
-                  height: `${Math.max(3, isCylinder ? w : d)}px`,
+                  width: `${w}px`,
+                  height: `${isCylinder ? w : d}px`,
                   transform: `translate(-50%, -50%) rotate(${-(obs.rotation[1] * 180) / Math.PI}deg)`,
                 }}
               />
