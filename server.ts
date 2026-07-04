@@ -300,7 +300,7 @@ async function startServer() {
 
       obstacles.forEach((obs, index) => {
         let rigidBodyDesc = RAPIER.RigidBodyDesc.fixed()
-          .setTranslation(obs.position[0], obs.position[1], obs.position[2]);
+          .setTranslation(obs.position[0], 0, obs.position[2]);
         if (obs.rotation[1] !== 0) {
           // Represent y-axis rotation as a quaternion
           const halfAngle = obs.rotation[1] / 2;
@@ -314,22 +314,24 @@ async function startServer() {
         } else {
           colliderDesc = RAPIER.ColliderDesc.cylinder(obs.size[1] / 2, obs.size[0] / 2);
         }
+        // Offset collider by half height locally to sit flush on y=0 floor
+        colliderDesc.setTranslation(0, obs.size[1] / 2, 0);
         world.createCollider(colliderDesc, body);
       });
 
-      // Add boundary walls
+      // Add boundary walls at y=0, offset colliders to y=6 locally
       // West Wall
-      let wBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(-100, 6, 0));
-      world.createCollider(RAPIER.ColliderDesc.cuboid(0.5, 6, 100), wBody);
+      let wBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(-100, 0, 0));
+      world.createCollider(RAPIER.ColliderDesc.cuboid(0.5, 6, 100).setTranslation(0, 6, 0), wBody);
       // East Wall
-      let eBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(100, 6, 0));
-      world.createCollider(RAPIER.ColliderDesc.cuboid(0.5, 6, 100), eBody);
+      let eBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(100, 0, 0));
+      world.createCollider(RAPIER.ColliderDesc.cuboid(0.5, 6, 100).setTranslation(0, 6, 0), eBody);
       // North Wall
-      let nBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, 6, -100));
-      world.createCollider(RAPIER.ColliderDesc.cuboid(100, 6, 0.5), nBody);
+      let nBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, 0, -100));
+      world.createCollider(RAPIER.ColliderDesc.cuboid(100, 6, 0.5).setTranslation(0, 6, 0), nBody);
       // South Wall
-      let sBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, 6, 100));
-      world.createCollider(RAPIER.ColliderDesc.cuboid(100, 6, 0.5), sBody);
+      let sBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, 0, 100));
+      world.createCollider(RAPIER.ColliderDesc.cuboid(100, 6, 0.5).setTranslation(0, 6, 0), sBody);
 
       return world;
     };
