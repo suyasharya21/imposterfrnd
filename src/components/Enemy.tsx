@@ -12,7 +12,7 @@ import { Text, Float } from '@react-three/drei';
 
 const ENEMY_SPEED = 6.75;
 const CHASE_DIST = 160;
-const SHOOT_DIST = 25;
+const SHOOT_DIST = 15;
 const SHOOT_COOLDOWN = 3500; 
 const AIM_TIME = 1000; 
 const BOT_FLOAT_HEIGHT = 0.05; 
@@ -466,7 +466,7 @@ export function Enemy({ data }: { data: EnemyData }) {
     if (other && other.userData && other.userData.name) {
       const hitName = other.userData.name;
       // If it's a wall or obstacle
-      if (hitName.startsWith('obstacle-') || hitName.startsWith('wall') || hitName === 'floor') {
+      if (hitName.startsWith('obstacle-') || hitName.startsWith('wall')) {
         // Change patrol target immediately
         patrolTarget.current.set(
           (Math.random() - 0.5) * 170,
