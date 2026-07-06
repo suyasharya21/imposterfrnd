@@ -1,7 +1,7 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
-*/
+ */
 
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Physics } from '@react-three/rapier';
@@ -54,11 +54,11 @@ function GameLoop() {
 export function Game() {
   const enemies = useGameStore(state => state.enemies);
   const coins = useGameStore(state => state.coins);
+  const arenaSeed = useGameStore(state => state.arenaSeed);
   const otherPlayerIds = useGameStore(
     useShallow(state => Object.keys(state.otherPlayers))
   );
   const isMobile = useIsMobile();
-
   const [dpr, setDpr] = useState(1.5);
 
   return (
@@ -94,7 +94,7 @@ export function Game() {
         <Arena />
         <Player />
         {enemies.map(enemy => (
-          <Enemy key={enemy.id} data={enemy} />
+          <Enemy key={`${enemy.id}-${arenaSeed}`} data={enemy} />
         ))}
         {coins.map(coin => (
           <Coin key={coin.id} data={coin} />
