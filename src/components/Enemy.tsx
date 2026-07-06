@@ -184,7 +184,7 @@ export function Enemy({ data }: { data: EnemyData }) {
         toTarget.normalize();
         
         const dot = facingDir.dot(toTarget);
-        if (dot > 0.5 && checkLoS(targetPos)) {
+        if (dot > -0.707 && checkLoS(targetPos)) { // Wider vision (270 degrees)
           return true;
         }
       }
@@ -280,22 +280,6 @@ export function Enemy({ data }: { data: EnemyData }) {
       const pursuitPos = closestTargetPos || lastKnownEnemyPos.current!;
       direction.subVectors(pursuitPos, currentPos).normalize();
       
-      // Simple Obstacle Avoidance
-      const rayOrigin = new THREE.Vector3(currentPos.x, currentPos.y + 0.5, currentPos.z);
-      const rayDir = direction.clone();
-      const ray = new rapier.Ray(rayOrigin, rayDir);
-      const hit = world.castRay(ray, 4, true, undefined, undefined, undefined, body.current!);
-      
-      if (hit) {
-        const parent = hit.collider.parent();
-        const hitName = (parent?.userData as { name?: string })?.name || '';
-        
-        if (hitName !== 'player' && !Object.keys(otherPlayers).includes(hitName)) {
-          const rightSteer = new THREE.Vector3().crossVectors(direction, new THREE.Vector3(0, 1, 0));
-          direction.add(rightSteer.multiplyScalar(2.0)).normalize();
-        }
-      }
-
       if (gunGroupRef.current) {
         gunGroupRef.current.lookAt(pursuitPos);
       }
@@ -408,6 +392,35 @@ export function Enemy({ data }: { data: EnemyData }) {
     }
     lastPos.current.copy(currentPos);
 
+    // Apply Obstacle Avoidance for all states to prevent getting stuck on walls
+    if (direction.lengthSq() > 0.01) {
+      const rayOrigin = new THREE.Vector3(currentPos.x, currentPos.y + 0.5, currentPos.z);
+      const rayDir = direction.clone().normalize();
+      const ray = new rapier.Ray(rayOrigin, rayDir);
+      const hit = world.castRay(ray, 3.5, true, undefined, undefined, undefined, body.current!);
+      
+      if (hit) {
+        const parent = hit.collider.parent();
+        const hitName = (parent?.userData as { name?: string })?.name || '';
+        
+        if (hitName !== 'player' && !Object.keys(otherPlayers).includes(hitName) && hitName !== data.id) {
+          // Steer laterally to go around the wall/obstacle
+          const rightSteer = new THREE.Vector3().crossVectors(direction, new THREE.Vector3(0, 1, 0));
+          direction.add(rightSteer.multiplyScalar(3.0)).normalize();
+          
+          // If in patrol state, also pick a new target since we are about to hit a wall
+          if (state.current === 'patrol') {
+            patrolTarget.current.set(
+              (Math.random() - 0.5) * 170,
+              targetHeight,
+              (Math.random() - 0.5) * 170
+            );
+            lastPatrolChange.current = Date.now();
+          }
+        }
+      }
+    }
+
     // Apply movement
     const velocity = body.current.linvel();
     
@@ -447,12 +460,41 @@ export function Enemy({ data }: { data: EnemyData }) {
     }
   });
 
+  const handleCollision = (e: any) => {
+    if (data.state !== 'active') return;
+    const other = e.other.rigidBodyObject;
+    if (other && other.userData && other.userData.name) {
+      const hitName = other.userData.name;
+      // If it's a wall or obstacle
+      if (hitName.startsWith('obstacle-') || hitName.startsWith('wall') || hitName === 'floor') {
+        // Change patrol target immediately
+        patrolTarget.current.set(
+          (Math.random() - 0.5) * 170,
+          BOT_FLOAT_HEIGHT,
+          (Math.random() - 0.5) * 170
+        );
+        lastPatrolChange.current = Date.now();
+        
+        // Push them slightly away in the opposite direction to unstick
+        if (body.current) {
+          const linvel = body.current.linvel();
+          body.current.setLinvel({
+            x: -linvel.x * 0.75,
+            y: linvel.y,
+            z: -linvel.z * 0.75
+          }, true);
+        }
+      }
+    }
+  };
+
   const color = data.state === 'disabled' ? '#333' : '#ff0055';
   const glowColor = data.state === 'disabled' ? '#111' : '#39ff14';
 
   return (
     <RigidBody
       ref={body}
+      onCollisionEnter={handleCollision}
       colliders={false}
       mass={5}
       type="dynamic"
