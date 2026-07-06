@@ -309,7 +309,7 @@ export function Player() {
     const rayOrigin = { x: pos.x, y: pos.y + 0.1, z: pos.z };
     const rayDir = { x: 0, y: -1, z: 0 };
     const ray = new rapier.Ray(rayOrigin, rayDir);
-    const hit = world.castRay(ray, 0.25, true); // Adjusted to be more precise
+    const hit = world.castRay(ray, 0.25, true, undefined, undefined, undefined, body.current!);
     const isGrounded = hit !== null;
 
     // Handle Jump - Just a single hop on press (Keyboard or Mobile)
