@@ -9,7 +9,7 @@ import { getObstacles } from './src/constants';
 async function startServer() {
   await RAPIER.init();
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
   const httpServer = createServer(app);
   const io = new Server(httpServer, {
     cors: {
@@ -596,9 +596,10 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static('dist'));
+    const staticPath = process.env.STATIC_PATH || path.join(__dirname, 'dist');
+    app.use(express.static(staticPath));
     app.get('*', (req, res) => {
-      res.sendFile(path.join(process.cwd(), 'dist', 'index.html'));
+      res.sendFile(path.join(staticPath, 'index.html'));
     });
   }
 
