@@ -254,7 +254,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         cpuLevelCleared: false,
         isConnecting: false,
         roomCode: 'OFFLINE_OPS',
-        timeLeft: 300,
+        timeLeft: 480,
         score: 0,
         arenaSeed,
         enemies,
@@ -918,6 +918,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       arenaSeed: nextSeed,
       enemies: newLevelEnemies,
       coins: newCoins,
+      timeLeft: state.timeLeft + 30,
       ammo: { gun: 100, pistol: 100, knife: Infinity },
       lives: Math.min(5, state.lives + 1), // bonus life reward
       forcedPosition: [0, 1, 0], // teleport player back to center spawn point
