@@ -7,7 +7,7 @@ import { create } from 'zustand';
 import * as THREE from 'three';
 import { io, Socket } from 'socket.io-client';
 import { sounds } from './lib/sounds';
-import { mulberry32 } from './constants';
+import { mulberry32, getObstacles, ObstacleData } from './constants';
 
 export type GameState = 'menu' | 'waiting' | 'playing' | 'gameover';
 export type EntityState = 'active' | 'disabled';
@@ -156,6 +156,39 @@ const INITIAL_ENEMIES: EnemyData[] = [
   { id: 'bot-8', position: [0, 1, 50], state: 'active', disabledUntil: 0, score: 0, health: 2 },
 ];
 
+const checkOverlap = (x: number, z: number, obstacles: ObstacleData[]) => {
+  const buffer = 2.0; // Keep bots at least 2 meters away from obstacle centers/edges to prevent boundary push-outs
+  for (const obs of obstacles) {
+    if (obs.type === 'cylinder') {
+      const radius = obs.size[0] / 2;
+      const dx = x - obs.position[0];
+      const dz = z - obs.position[2];
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist < radius + buffer) return true;
+    } else {
+      // Box obstacle
+      const ox = obs.position[0];
+      const oz = obs.position[2];
+      const halfW = obs.size[0] / 2;
+      const halfD = obs.size[2] / 2;
+      const rot = obs.rotation[1];
+      
+      // Unrotate point (x, z) relative to obstacle center (ox, oz)
+      const dx = x - ox;
+      const dz = z - oz;
+      const cos = Math.cos(-rot);
+      const sin = Math.sin(-rot);
+      const localX = dx * cos - dz * sin;
+      const localZ = dx * sin + dz * cos;
+      
+      if (Math.abs(localX) < halfW + buffer && Math.abs(localZ) < halfD + buffer) {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+
 export const useGameStore = create<GameStore>((set, get) => ({
   gameState: 'menu',
   score: 0,
@@ -223,13 +256,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (mode === 'cpu') {
       const arenaSeed = Math.floor(Math.random() * 1000000);
       const rng = mulberry32(arenaSeed + 1);
+      const obstacles = getObstacles(false, arenaSeed);
       // Level 1 starts with 3 bots
       const enemies: EnemyData[] = Array.from({ length: 3 }).map((_, i) => {
         let x, z;
         do {
           x = (rng() - 0.5) * 170;
           z = (rng() - 0.5) * 170;
-        } while (Math.abs(x) < 20 && Math.abs(z) < 20);
+        } while ((Math.abs(x) < 20 && Math.abs(z) < 20) || checkOverlap(x, z, obstacles));
         
         return {
           id: `bot-${i + 1}`,
@@ -300,12 +334,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
       delete otherPlayers[newSocket!.id!];
       
       const rng = mulberry32(arenaSeed + 1);
+      const obstacles = getObstacles(false, arenaSeed);
       const enemies: EnemyData[] = Array.from({ length: 8 }).map((_, i) => {
         let x, z;
         do {
           x = (rng() - 0.5) * 160;
           z = (rng() - 0.5) * 160;
-        } while (Math.abs(x) < 20 && Math.abs(z) < 20);
+        } while ((Math.abs(x) < 20 && Math.abs(z) < 20) || checkOverlap(x, z, obstacles));
         
         return {
           id: `bot-${i + 1}`,
@@ -889,12 +924,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const nextLevel = state.cpuLevel + 1;
     const nextSeed = Math.floor(Math.random() * 1000000);
     const rng = mulberry32(nextSeed + nextLevel);
+    const obstacles = getObstacles(false, nextSeed);
     const newLevelEnemies: EnemyData[] = Array.from({ length: nextLevel + 2 }).map((_, i) => {
       let x, z;
       do {
         x = (rng() - 0.5) * 170;
         z = (rng() - 0.5) * 170;
-      } while (Math.abs(x) < 20 && Math.abs(z) < 20);
+      } while ((Math.abs(x) < 20 && Math.abs(z) < 20) || checkOverlap(x, z, obstacles));
 
       return {
         id: `bot-${i + 1}`,

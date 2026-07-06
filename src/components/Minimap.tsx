@@ -102,10 +102,10 @@ export function Minimap() {
                   top: `${z + MAP_SIZE / 2}px`,
                   width: `${w}px`,
                   height: `${isCylinder ? w : d}px`,
-                  backgroundColor: obs.color,
-                  opacity: 0.75,
-                  border: `1px solid ${obs.color}`,
-                  boxShadow: `0 0 6px ${obs.color}80`,
+                  backgroundColor: '#52525b',
+                  opacity: 0.8,
+                  border: '1px solid #a1a1aa',
+                  boxShadow: '0 0 4px rgba(161, 161, 170, 0.4)',
                   transform: `rotate(${-(obs.rotation[1] * 180) / Math.PI}deg) translate(-50%, -50%)`,
                 }}
               />

@@ -440,6 +440,12 @@ export function Enemy({ data }: { data: EnemyData }) {
       }
     }
 
+    // Hard height check: if bot gets pushed on top of a wall/pillar (height > 1.5m), teleport them back down
+    if (data.state === 'active' && pos.y > 1.5) {
+      body.current.setTranslation({ x: pos.x, y: 0.1, z: pos.z }, true);
+      yVel = 0;
+    }
+
     // Smoothen horizontal movement to prevent "twitching"
     const currentMoveDir = new THREE.Vector3(velocity.x, 0, velocity.z);
     const targetMoveDir = direction.clone().multiplyScalar(ENEMY_SPEED);
