@@ -107,6 +107,8 @@ interface GameStore {
   timerInterval: NodeJS.Timeout | null;
   hostId: string | null;
   lobbyCountdown: number | null;
+  playerName: string;
+  setPlayerName: (name: string) => void;
   hostStartGame: () => void;
   startGame: (mode: 'online' | 'cpu' | 'room', code?: string) => void;
   createRoom: () => void;
@@ -220,6 +222,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   gameMode: null,
   hostId: null,
   lobbyCountdown: null,
+  playerName: `Pilot-${Math.floor(100 + Math.random() * 900)}`,
+  setPlayerName: (name) => set({ playerName: name }),
   cpuLevel: 1,
   cpuLevelCleared: false,
   otherPlayers: {},
@@ -320,12 +324,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
     newSocket = io(window.location.origin);
     
     newSocket.on('connect', () => {
+      const playerName = get().playerName;
       if (mode === 'online') {
-        newSocket!.emit('joinOnline');
+        newSocket!.emit('joinOnline', { playerName });
       } else if (mode === 'room' && code) {
-        newSocket!.emit('joinWithCode', code);
+        newSocket!.emit('joinWithCode', { code, playerName });
       } else if (mode === 'room' && !code) {
-        newSocket!.emit('createRoom');
+        newSocket!.emit('createRoom', { playerName });
       }
     });
 

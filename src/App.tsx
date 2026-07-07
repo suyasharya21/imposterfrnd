@@ -215,6 +215,8 @@ export default function App() {
   const lobbyCountdown = useGameStore(state => state.lobbyCountdown);
   const hostStartGame = useGameStore(state => state.hostStartGame);
   const socket = useGameStore(state => state.socket);
+  const playerName = useGameStore(state => state.playerName);
+  const setPlayerName = useGameStore(state => state.setPlayerName);
   
   const currentPlayerCount = Object.keys(otherPlayers).length + 1;
   const isHost = socket && hostId === socket.id;
@@ -569,6 +571,20 @@ export default function App() {
               [ ERROR ]: {error}
             </div>
           )}
+
+          {/* Pilot CALLSIGN Input */}
+          <div className="w-full max-w-xl px-6 mb-6">
+            <div className="bg-[#050a05]/80 border-2 border-lime-400/20 p-4 rounded-xl flex items-center justify-between shadow-[0_0_20px_rgba(163,230,53,0.05)]">
+              <span className="text-[10px] text-lime-400/50 font-black uppercase tracking-widest whitespace-nowrap mr-4">PILOT CALLSIGN:</span>
+              <input
+                type="text"
+                value={playerName}
+                onChange={(e) => setPlayerName(e.target.value.toUpperCase().slice(0, 15))}
+                placeholder="ENTER CALLSIGN"
+                className="bg-black border-2 border-lime-400/30 px-3 py-1.5 text-lime-400 font-black uppercase text-sm tracking-widest focus:border-lime-400 outline-none w-full max-w-[240px] rounded text-center"
+              />
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-xl px-6">
             {menuView === 'main' ? (

@@ -385,12 +385,26 @@ async function startServer() {
       }
     };
 
-    socket.on('createRoom', () => {
+    socket.on('createRoom', (data?: { playerName?: string }) => {
       const roomId = generateRoomId();
-      joinRoom(roomId, `Player ${Math.floor(Math.random() * 1000)}`);
+      const name = data?.playerName || `Player ${Math.floor(Math.random() * 1000)}`;
+      joinRoom(roomId, name);
     });
 
-    socket.on('joinWithCode', (code: string) => {
+    socket.on('joinWithCode', (data: { code: string, playerName?: string } | string) => {
+      let code = '';
+      let playerName = '';
+      if (typeof data === 'string') {
+        code = data;
+      } else if (data && typeof data === 'object') {
+        code = data.code;
+        playerName = data.playerName || '';
+      }
+      
+      if (!playerName) {
+        playerName = `Player ${Math.floor(Math.random() * 1000)}`;
+      }
+
       const room = rooms[code];
       if (!room) {
         socket.emit('gameError', 'Room not found');
@@ -404,10 +418,11 @@ async function startServer() {
         socket.emit('gameError', 'Game already started in this room');
         return;
       }
-      joinRoom(code, `Player ${Math.floor(Math.random() * 1000)}`);
+      joinRoom(code, playerName);
     });
 
-    socket.on('joinOnline', () => {
+    socket.on('joinOnline', (data?: { playerName?: string }) => {
+      const name = data?.playerName || `Player ${Math.floor(Math.random() * 1000)}`;
       let roomId = Object.keys(rooms).find(id => {
         return rooms[id].status === 'waiting' && Object.keys(rooms[id].players).length < MAX_ROOM_SIZE && id.length === 6;
       });
@@ -415,7 +430,7 @@ async function startServer() {
       if (!roomId) {
         roomId = generateRoomId();
       }
-      joinRoom(roomId, `Player ${Math.floor(Math.random() * 1000)}`);
+      joinRoom(roomId, name);
     });
 
     socket.on('updatePosition', (data: { position: [number, number, number], rotation: number }) => {
