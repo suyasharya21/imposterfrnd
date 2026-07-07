@@ -23,6 +23,19 @@ export interface EnemyData {
   health: number;
 }
 
+export const getMenuBots = (): EnemyData[] => Array.from({ length: 5 }).map((_, i) => {
+  const angle = (i * 2 * Math.PI) / 5;
+  const radius = 25;
+  return {
+    id: `bot-menu-${i + 1}`,
+    position: [Math.sin(angle) * radius, 1, Math.cos(angle) * radius],
+    state: 'active',
+    disabledUntil: 0,
+    score: 0,
+    health: 2
+  };
+});
+
 export interface PlayerData {
   id: string;
   name: string;
@@ -165,7 +178,7 @@ const checkOverlap = (x: number, z: number, obstacles: ObstacleData[]) => {
 
 export const useGameStore = create<GameStore>((set, get) => ({
   gameState: 'menu', score: 0, timeLeft: 150, playerState: 'active', playerDisabledUntil: 0,
-  enemies: [], lasers: [], particles: [], events: [], coins: [], role: null, isAlive: true,
+  enemies: getMenuBots(), lasers: [], particles: [], events: [], coins: [], role: null, isAlive: true,
   votingPhase: false, tasks: [], chatHistory: [], isDoingTask: false, currentTaskId: null,
   setIsDoingTask: (isDoingTask, taskId) => set({ isDoingTask, currentTaskId: taskId }), forcedPosition: null,
 
@@ -349,7 +362,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   createRoom: () => get().startGame('room'), joinRoom: (code) => get().startGame('room', code),
   hostStartGame: () => { const { socket } = get(); if (socket) socket.emit('hostStartGame'); },
   endGame: () => { const { socket, timerInterval } = get(); if (socket) socket.disconnect(); if (timerInterval) clearInterval(timerInterval); set({ gameState: 'gameover', socket: null, timerInterval: null, votingPhase: false, isDoingTask: false, currentTaskId: null }); },
-  leaveGame: () => { const { socket, timerInterval } = get(); if (socket) socket.disconnect(); if (timerInterval) clearInterval(timerInterval); set({ gameState: 'menu', socket: null, timerInterval: null, isConnecting: false, otherPlayers: {}, hostId: null, lobbyCountdown: null, enemies: [], lasers: [], particles: [], events: [], coins: [], score: 0, timeLeft: 150, playerState: 'active', lives: 3, ammo: { gun: 30, pistol: 20, knife: Infinity }, role: null, isAlive: true, votingPhase: false, tasks: [], chatHistory: [], isDoingTask: false, currentTaskId: null }); },
+  leaveGame: () => { const { socket, timerInterval } = get(); if (socket) socket.disconnect(); if (timerInterval) clearInterval(timerInterval); set({ gameState: 'menu', socket: null, timerInterval: null, isConnecting: false, otherPlayers: {}, hostId: null, lobbyCountdown: null, enemies: getMenuBots(), lasers: [], particles: [], events: [], coins: [], score: 0, timeLeft: 150, playerState: 'active', lives: 3, ammo: { gun: 30, pistol: 20, knife: Infinity }, role: null, isAlive: true, votingPhase: false, tasks: [], chatHistory: [], isDoingTask: false, currentTaskId: null }); },
   updateTime: (delta) => set((state) => {
     if (state.gameState !== 'playing' || state.gameMode !== 'cpu') return state;
     const newTime = state.timeLeft - delta;

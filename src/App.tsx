@@ -228,8 +228,33 @@ export default function App() {
   const [lockCooldown, setLockCooldown] = useState(false);
   const [menuView, setMenuView] = useState<'main' | 'join'>('main');
   const [joinInput, setJoinInput] = useState('');
-  const [introStep, setIntroStep] = useState<'engage' | 'studio' | 'title' | 'done'>('engage');
+  const [introStep, setIntroStep] = useState<'studio' | 'title' | 'done'>('studio');
   const [loadingProgress, setLoadingProgress] = useState(0);
+
+  useEffect(() => {
+    let hasPlayedBoom = false;
+    const handleFirstInteraction = () => {
+      sounds.resume();
+      if (!hasPlayedBoom && introStep !== 'done') {
+        sounds.playIntroBoom();
+        hasPlayedBoom = true;
+      }
+      if (gameState === 'menu' || gameState === 'waiting') {
+        sounds.startMenuBGM();
+      }
+      window.removeEventListener('mousedown', handleFirstInteraction);
+      window.removeEventListener('keydown', handleFirstInteraction);
+      window.removeEventListener('touchstart', handleFirstInteraction);
+    };
+    window.addEventListener('mousedown', handleFirstInteraction);
+    window.addEventListener('keydown', handleFirstInteraction);
+    window.addEventListener('touchstart', handleFirstInteraction);
+    return () => {
+      window.removeEventListener('mousedown', handleFirstInteraction);
+      window.removeEventListener('keydown', handleFirstInteraction);
+      window.removeEventListener('touchstart', handleFirstInteraction);
+    };
+  }, [introStep, gameState]);
 
   useEffect(() => {
     if (introStep === 'studio') {
@@ -315,43 +340,14 @@ export default function App() {
       {/* 3D Canvas */}
       <div className="absolute inset-0">
         <Game />
-      </div>
-
-      {/* Cinematic Intro Overlays */}
+      </div>      {/* Cinematic Intro Overlays */}
       {introStep !== 'done' && (
-        <div className="absolute inset-0 bg-black z-[300] flex flex-col items-center justify-center p-6 select-none font-mono">
+        <div className="absolute inset-0 bg-black/45 backdrop-blur-[8px] z-[300] flex flex-col items-center justify-center p-6 select-none font-mono">
           {/* Futuristic Scanline Effect */}
-          <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(163,230,53,0.03)_50%,transparent_50%)] bg-[length:100%_4px] z-50 animate-cyber-pulse" />
-
-          {introStep === 'engage' && (
-            <div className="max-w-md w-full bg-[#030703] border-2 border-lime-400 p-8 rounded-xl shadow-[0_0_50px_rgba(163,230,53,0.25)] flex flex-col items-center text-center gap-6 relative">
-              <div className="absolute -top-3.5 left-6 bg-lime-400 text-black px-2 py-0.5 text-[9px] font-black tracking-widest uppercase">
-                Warning // Protocol
-              </div>
-              <h2 className="text-lime-400 text-lg font-black tracking-[0.15em] uppercase animate-pulse">
-                Neural Link Interface
-              </h2>
-              <div className="text-xs text-lime-400/60 leading-relaxed text-left bg-black/60 p-4 border border-lime-400/10 rounded">
-                <p>&gt; Encrypted tactical link required for deployment.</p>
-                <p>&gt; Audio synthesis systems initialization pending.</p>
-                <p>&gt; Combat authorization: LEVEL 10 clearance.</p>
-              </div>
-              <button
-                onClick={() => {
-                  sounds.resume();
-                  sounds.playIntroBoom();
-                  setIntroStep('studio');
-                }}
-                onMouseEnter={() => sounds.playHover()}
-                className="w-full py-4 bg-lime-400 text-black font-black uppercase text-sm tracking-[0.2em] shadow-[0_0_20px_rgba(163,230,53,0.4)] hover:scale-[1.03] active:scale-95 transition-all cursor-pointer"
-              >
-                Engage Combat Link
-              </button>
-            </div>
-          )}
+          <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(163,230,53,0.02)_50%,transparent_50%)] bg-[length:100%_4px] z-50 animate-cyber-pulse" />
 
           {introStep === 'studio' && (
-            <div className="flex flex-col items-center gap-2 animate-in fade-in zoom-in-75 duration-700">
+            <div className="backdrop-blur-xl bg-black/60 border border-lime-400/10 px-10 py-8 rounded-2xl shadow-[0_0_40px_rgba(163,230,53,0.1)] flex flex-col items-center gap-2 animate-in fade-in zoom-in-95 duration-700">
               <span className="text-[10px] text-lime-400/40 font-black tracking-[0.3em] uppercase">Developed By</span>
               <h2 className="text-lime-400 text-3xl md:text-5xl font-black tracking-[0.25em] uppercase animate-glitch animate-neon-glow">
                 ANTIGRAVITY SYSTEMS
@@ -361,7 +357,11 @@ export default function App() {
           )}
 
           {introStep === 'title' && (
-            <div className="flex flex-col items-center gap-6 animate-in fade-in duration-500">
+            <div className="backdrop-blur-xl bg-black/65 border-2 border-lime-400/20 p-12 md:p-16 rounded-3xl shadow-[0_0_60px_rgba(163,230,53,0.18)] flex flex-col items-center gap-6 animate-in fade-in duration-500 relative">
+              <div className="absolute -top-3.5 left-10 bg-lime-400 text-black px-2.5 py-0.5 text-[9px] font-black tracking-widest uppercase">
+                System Sync
+              </div>
+              
               <span className="text-[9px] text-lime-400/50 font-black tracking-[0.4em] uppercase animate-pulse">Initializing Interface...</span>
               <h1 className="text-6xl md:text-8xl font-black text-lime-400 tracking-tighter uppercase italic drop-shadow-[0_0_30px_rgba(163,230,53,0.7)] animate-glitch">
                 IMPOSTERFRND

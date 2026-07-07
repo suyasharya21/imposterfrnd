@@ -51,6 +51,22 @@ function GameLoop() {
   return null;
 }
 
+function MenuCameraController() {
+  const gameState = useGameStore(state => state.gameState);
+  
+  useFrame((state_fiber) => {
+    if (gameState === 'menu' || gameState === 'waiting') {
+      const time = state_fiber.clock.getElapsedTime() * 0.08;
+      const radius = 28;
+      state_fiber.camera.position.x = Math.sin(time) * radius;
+      state_fiber.camera.position.z = Math.cos(time) * radius;
+      state_fiber.camera.position.y = 14 + Math.sin(time * 0.4) * 4;
+      state_fiber.camera.lookAt(0, 1.5, 0);
+    }
+  });
+  return null;
+}
+
 export function Game() {
   const enemies = useGameStore(state => state.enemies);
   const coins = useGameStore(state => state.coins);
@@ -91,6 +107,7 @@ export function Game() {
       
       <Physics gravity={[0, -20, 0]}>
         <GameLoop />
+        <MenuCameraController />
         <Arena />
         <Player />
         {enemies.map(enemy => (

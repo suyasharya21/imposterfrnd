@@ -66,7 +66,7 @@ export function Enemy({ data }: { data: EnemyData }) {
   useFrame((state_fiber, delta) => {
     const fiberTime = state_fiber.clock.elapsedTime;
     
-    if (!body.current || gameState !== 'playing') return;
+    if (!body.current || (gameState !== 'playing' && gameState !== 'menu' && gameState !== 'waiting')) return;
 
     if (votingPhase || !isAlive) {
       body.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
@@ -268,6 +268,12 @@ export function Enemy({ data }: { data: EnemyData }) {
         state.current = 'patrol';
         lastPatrolChange.current = 0; // Force immediate new target
       }
+    }
+
+    if (gameState !== 'playing') {
+      state.current = 'patrol';
+      closestTargetPos = null;
+      lastKnownEnemyPos.current = null;
     }
 
     const direction = new THREE.Vector3();
