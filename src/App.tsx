@@ -112,7 +112,7 @@ function HUD() {
         </div>
         
         {/* Leaderboard - Hide on mobile if screen is small, or make smaller */}
-        {!isMobile && (
+        {!isMobile && gameMode !== 'cpu' && (
           <div className="bg-black/50 border border-lime-900/50 p-3 rounded w-48 flex flex-col gap-1">
             <div className="text-lime-400/70 text-xs font-bold mb-1 border-b border-lime-900/50 pb-1">LEADERBOARD</div>
             {leaderboard.map((p, i) => (

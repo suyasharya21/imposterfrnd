@@ -154,8 +154,9 @@ export function Enemy({ data }: { data: EnemyData }) {
 
     const checkLoS = (targetPos: THREE.Vector3) => {
       const rayOrigin = new THREE.Vector3(currentPos.x, currentPos.y + 1, currentPos.z);
-      const rayDir = new THREE.Vector3().subVectors(targetPos, rayOrigin).normalize();
-      const dist = rayOrigin.distanceTo(targetPos);
+      const targetCenter = new THREE.Vector3(targetPos.x, targetPos.y + 1, targetPos.z);
+      const rayDir = new THREE.Vector3().subVectors(targetCenter, rayOrigin).normalize();
+      const dist = rayOrigin.distanceTo(targetCenter);
       const ray = new rapier.Ray(rayOrigin, rayDir);
       const hit = world.castRay(ray, dist, true, undefined, undefined, undefined, body.current!);
       
@@ -192,7 +193,7 @@ export function Enemy({ data }: { data: EnemyData }) {
     };
 
     if (playerState === 'active' && role !== 'imposter') {
-      const pPos = new THREE.Vector3(playerPosition[0], pos.y, playerPosition[2]);
+      const pPos = new THREE.Vector3(playerPosition[0], playerPosition[1], playerPosition[2]);
       const distToPlayer = currentPos.distanceTo(pPos);
       if (distToPlayer < closestDist && checkVisibility(pPos, distToPlayer)) {
         closestDist = distToPlayer;
@@ -203,7 +204,7 @@ export function Enemy({ data }: { data: EnemyData }) {
     // Check other players
     Object.values(otherPlayers).forEach(p => {
       if (p.state === 'active' && p.role !== 'imposter') {
-        const pPos = new THREE.Vector3(p.position[0], pos.y, p.position[2]);
+        const pPos = new THREE.Vector3(p.position[0], p.position[1], p.position[2]);
         const dist = currentPos.distanceTo(pPos);
         if (dist < closestDist && checkVisibility(pPos, dist)) {
           closestDist = dist;
@@ -281,7 +282,9 @@ export function Enemy({ data }: { data: EnemyData }) {
       direction.subVectors(pursuitPos, currentPos).normalize();
       
       if (gunGroupRef.current) {
-        gunGroupRef.current.lookAt(pursuitPos);
+        const lookTarget = pursuitPos.clone();
+        lookTarget.y += 1.0;
+        gunGroupRef.current.lookAt(lookTarget);
       }
 
       // Shooting logic (Only if clear LoS and close enough)
@@ -301,6 +304,7 @@ export function Enemy({ data }: { data: EnemyData }) {
             else laserOrigin.copy(currentPos).add(new THREE.Vector3(0, 1.5, 0));
 
             const targetLookAt = closestTargetPos.clone();
+            targetLookAt.y += 1.0;
             const spread = 0.04;
             targetLookAt.x += (Math.random() - 0.5) * spread * closestDist;
             targetLookAt.y += (Math.random() - 0.5) * spread * closestDist;
@@ -391,6 +395,12 @@ export function Enemy({ data }: { data: EnemyData }) {
       }
     }
     lastPos.current.copy(currentPos);
+
+    // Keep steering/navigation strictly 2D on the horizontal plane
+    direction.y = 0;
+    if (direction.lengthSq() > 0.001) {
+      direction.normalize();
+    }
 
     // Apply Obstacle Avoidance for all states to prevent getting stuck on walls
     if (direction.lengthSq() > 0.01) {
