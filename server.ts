@@ -5,6 +5,8 @@ import { Server } from 'socket.io';
 import path from 'path';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { getObstacles } from './src/constants';
+import { createAdapter } from '@socket.io/redis-adapter';
+import Redis from 'ioredis';
 
 // --- Utility Functions for Server-Side Generation ---
 function mulberry32(a: number) {
@@ -58,8 +60,20 @@ async function startServer() {
   const app = express();
   const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
   const httpServer = createServer(app);
+
+  const pubClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+  const subClient = pubClient.duplicate();
+
+  pubClient.on('error', (err) => {
+    console.error('Redis pubClient error:', err.message);
+  });
+  subClient.on('error', (err) => {
+    console.error('Redis subClient error:', err.message);
+  });
+
   const io = new Server(httpServer, {
     cors: { origin: '*' },
+    adapter: createAdapter(pubClient, subClient)
   });
 
   interface Player {
@@ -111,6 +125,7 @@ async function startServer() {
     hostId?: string;
     countdown?: number | null;
     countdownInterval?: NodeJS.Timeout;
+    tickInterval?: NodeJS.Timeout;
   }
 
   const MAX_ROOM_SIZE = 8;
@@ -121,14 +136,31 @@ async function startServer() {
 
   const generateRoomId = () => Math.random().toString(36).substring(2, 8).toUpperCase();
 
+  const clearRoomIntervals = (roomId: string) => {
+    if (roomIntervals[roomId]) {
+      clearInterval(roomIntervals[roomId]);
+      delete roomIntervals[roomId];
+    }
+    const room = rooms[roomId];
+    if (room) {
+      if (room.tickInterval) {
+        clearInterval(room.tickInterval);
+        delete room.tickInterval;
+      }
+      if (room.physicsWorld) {
+        room.physicsWorld.free();
+        delete room.physicsWorld;
+      }
+    }
+  };
+
   const startRoomInterval = (roomId: string) => {
     if (roomIntervals[roomId]) return;
 
     roomIntervals[roomId] = setInterval(() => {
       const room = rooms[roomId];
       if (!room) {
-        clearInterval(roomIntervals[roomId]);
-        delete roomIntervals[roomId];
+        clearRoomIntervals(roomId);
         return;
       }
 
@@ -147,8 +179,7 @@ async function startServer() {
           room.status = 'waiting';
           room.phase = 'waiting';
           io.to(roomId).emit('gameOver', { result: 'imposter_wins', reason: 'time_out' });
-          clearInterval(roomIntervals[roomId]);
-          delete roomIntervals[roomId];
+          clearRoomIntervals(roomId);
         }
       } else if (room.phase === 'voting') {
         room.votingTimer--;
@@ -172,17 +203,22 @@ async function startServer() {
           room.status = 'waiting';
           room.phase = 'waiting';
           io.to(roomId).emit('gameOver', { result: 'imposter_wins', reason: 'crewmates_dead' });
-          clearInterval(roomIntervals[roomId]);
-          delete roomIntervals[roomId];
+          clearRoomIntervals(roomId);
         } else if (aliveImposters.length === 0) {
           room.status = 'waiting';
           room.phase = 'waiting';
           io.to(roomId).emit('gameOver', { result: 'crewmates_win', reason: 'imposter_dead' });
-          clearInterval(roomIntervals[roomId]);
-          delete roomIntervals[roomId];
+          clearRoomIntervals(roomId);
         }
       }
     }, 1000);
+
+    const room = rooms[roomId];
+    if (room && !room.tickInterval) {
+      room.tickInterval = setInterval(() => {
+        io.to(roomId).emit('roomTick', room.players);
+      }, 50);
+    }
   };
 
   const tallyVotes = (roomId: string) => {
@@ -209,10 +245,7 @@ async function startServer() {
         room.status = 'waiting';
         room.phase = 'waiting';
         io.to(roomId).emit('gameOver', { result: 'crewmates_win', name: selectedPlayer.name });
-        if (roomIntervals[roomId]) {
-          clearInterval(roomIntervals[roomId]);
-          delete roomIntervals[roomId];
-        }
+        clearRoomIntervals(roomId);
       } else {
         selectedPlayer.isAlive = false;
         selectedPlayer.state = 'disabled';
@@ -224,10 +257,7 @@ async function startServer() {
           room.status = 'waiting';
           room.phase = 'waiting';
           io.to(roomId).emit('gameOver', { result: 'imposter_wins', reason: 'crewmates_dead' });
-          if (roomIntervals[roomId]) {
-            clearInterval(roomIntervals[roomId]);
-            delete roomIntervals[roomId];
-          }
+          clearRoomIntervals(roomId);
         } else {
           room.phase = 'playing';
           room.votingTimer = 30;
@@ -407,7 +437,6 @@ async function startServer() {
         player.lastUpdateTime = Date.now();
         player.position = data.position;
         player.rotation = data.rotation;
-        socket.to(roomId).emit('playerMoved', { id: socket.id, ...data });
       }
     });
 
@@ -533,7 +562,7 @@ async function startServer() {
         if (rooms[roomId].tasks.length === 0) {
           rooms[roomId].status = 'waiting'; rooms[roomId].phase = 'waiting';
           io.to(roomId).emit('gameOver', { result: 'crewmates_win', reason: 'tasks_completed' });
-          if (roomIntervals[roomId]) { clearInterval(roomIntervals[roomId]); delete roomIntervals[roomId]; }
+          clearRoomIntervals(roomId);
         }
       }
     });
@@ -575,7 +604,7 @@ async function startServer() {
 
         if (playerCount === 0) {
           if (room.countdownInterval) clearInterval(room.countdownInterval);
-          if (roomIntervals[roomId]) { clearInterval(roomIntervals[roomId]); delete roomIntervals[roomId]; }
+          clearRoomIntervals(roomId);
           delete rooms[roomId];
         }
       }

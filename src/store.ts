@@ -285,6 +285,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
     newSocket.on('playerJoined', (player: PlayerData) => { sounds.playJoin(); set(state => ({ otherPlayers: { ...state.otherPlayers, [player.id]: player }, events: [...state.events, { id: Math.random().toString(), message: `${player.name} joined`, timestamp: Date.now() }] })); });
     newSocket.on('forcePosition', (pos: [number, number, number]) => set({ forcedPosition: pos }));
     newSocket.on('playerMoved', (data: any) => set(state => !state.otherPlayers[data.id] ? state : { otherPlayers: { ...state.otherPlayers, [data.id]: { ...state.otherPlayers[data.id], position: data.position, rotation: data.rotation } } }));
+    newSocket.on('roomTick', (serverPlayers: Record<string, PlayerData>) => {
+      set(state => {
+        const otherPlayers = { ...state.otherPlayers };
+        let updated = false;
+        Object.keys(serverPlayers).forEach(id => {
+          if (id !== newSocket!.id && otherPlayers[id]) {
+            otherPlayers[id] = {
+              ...otherPlayers[id],
+              position: serverPlayers[id].position,
+              rotation: serverPlayers[id].rotation
+            };
+            updated = true;
+          }
+        });
+        return updated ? { otherPlayers } : state;
+      });
+    });
     newSocket.on('playerShot', (data: any) => { sounds.playLaser(); set(state => ({ lasers: [...state.lasers, { id: Math.random().toString(36).substr(2, 9), start: data.start, end: data.end, timestamp: Date.now(), color: data.color }], particles: [...state.particles, { id: Math.random().toString(36).substr(2, 9), position: data.end, timestamp: Date.now(), color: data.color }] })); });
     
     newSocket.on('playerHit', (data: any) => {
