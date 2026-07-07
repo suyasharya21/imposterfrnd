@@ -110,6 +110,16 @@ export function Arena() {
     ];
   }, []);
 
+  // Instancing Wall Top Caps (Black color)
+  const wallTopCapInstances = useMemo(() => {
+    return [
+      { key: 'wall-cap-n', position: [0, 12.01, -100] as [number, number, number], rotation: [0, 0, 0] as [number, number, number], scale: [200.2, 0.05, 1.1] as [number, number, number] },
+      { key: 'wall-cap-s', position: [0, 12.01, 100] as [number, number, number], rotation: [0, Math.PI, 0] as [number, number, number], scale: [200.2, 0.05, 1.1] as [number, number, number] },
+      { key: 'wall-cap-e', position: [100, 12.01, 0] as [number, number, number], rotation: [0, -Math.PI / 2, 0] as [number, number, number], scale: [200.2, 0.05, 1.1] as [number, number, number] },
+      { key: 'wall-cap-w', position: [-100, 12.01, 0] as [number, number, number], rotation: [0, Math.PI / 2, 0] as [number, number, number], scale: [200.2, 0.05, 1.1] as [number, number, number] }
+    ];
+  }, []);
+
   // Instancing Obstacles
   const obstacleInstances = useMemo(() => {
     return obstacles.map((obs, idx) => ({
@@ -117,6 +127,16 @@ export function Arena() {
       position: [obs.position[0], obs.size[1] / 2, obs.position[2]] as [number, number, number],
       rotation: obs.rotation as [number, number, number],
       scale: obs.size as [number, number, number]
+    }));
+  }, [obstacles]);
+
+  // Instancing Obstacle Top Caps (Black color)
+  const obstacleTopCapInstances = useMemo(() => {
+    return obstacles.map((obs, idx) => ({
+      key: `obstacle-cap-${idx}`,
+      position: [obs.position[0], obs.size[1] + 0.01, obs.position[2]] as [number, number, number],
+      rotation: obs.rotation as [number, number, number],
+      scale: [obs.size[0] + 0.02, 0.05, obs.size[2] + 0.02] as [number, number, number]
     }));
   }, [obstacles]);
 
@@ -146,7 +166,9 @@ export function Arena() {
   }, [obstacles]);
 
   const wallsMeshRef = useRef<THREE.InstancedMesh>(null);
+  const wallCapsMeshRef = useRef<THREE.InstancedMesh>(null);
   const obstaclesMeshRef = useRef<THREE.InstancedMesh>(null);
+  const obstacleCapsMeshRef = useRef<THREE.InstancedMesh>(null);
   const greenAccentsMeshRef = useRef<THREE.InstancedMesh>(null);
   const pinkAccentsMeshRef = useRef<THREE.InstancedMesh>(null);
 
@@ -166,6 +188,19 @@ export function Arena() {
   }, [wallInstances, tempObject]);
 
   useLayoutEffect(() => {
+    if (wallCapsMeshRef.current) {
+      wallTopCapInstances.forEach((w, idx) => {
+        tempObject.position.set(w.position[0], w.position[1], w.position[2]);
+        tempObject.rotation.set(w.rotation[0], w.rotation[1], w.rotation[2]);
+        tempObject.scale.set(w.scale[0], w.scale[1], w.scale[2]);
+        tempObject.updateMatrix();
+        wallCapsMeshRef.current!.setMatrixAt(idx, tempObject.matrix);
+      });
+      wallCapsMeshRef.current.instanceMatrix.needsUpdate = true;
+    }
+  }, [wallTopCapInstances, tempObject]);
+
+  useLayoutEffect(() => {
     if (obstaclesMeshRef.current) {
       obstacleInstances.forEach((obs, idx) => {
         tempObject.position.set(obs.position[0], obs.position[1], obs.position[2]);
@@ -177,6 +212,19 @@ export function Arena() {
       obstaclesMeshRef.current.instanceMatrix.needsUpdate = true;
     }
   }, [obstacleInstances, tempObject]);
+
+  useLayoutEffect(() => {
+    if (obstacleCapsMeshRef.current) {
+      obstacleTopCapInstances.forEach((obs, idx) => {
+        tempObject.position.set(obs.position[0], obs.position[1], obs.position[2]);
+        tempObject.rotation.set(obs.rotation[0], obs.rotation[1], obs.rotation[2]);
+        tempObject.scale.set(obs.scale[0], obs.scale[1], obs.scale[2]);
+        tempObject.updateMatrix();
+        obstacleCapsMeshRef.current!.setMatrixAt(idx, tempObject.matrix);
+      });
+      obstacleCapsMeshRef.current.instanceMatrix.needsUpdate = true;
+    }
+  }, [obstacleTopCapInstances, tempObject]);
 
   useLayoutEffect(() => {
     if (greenAccentsMeshRef.current) {
@@ -233,6 +281,12 @@ export function Arena() {
         <meshStandardMaterial color="#0a0a25" roughness={0.4} metalness={0.6} />
       </instancedMesh>
 
+      {/* Boundary Wall Top Caps (Instanced Black Color) */}
+      <instancedMesh ref={wallCapsMeshRef} args={[null, null, 4]} castShadow={false} receiveShadow={false}>
+        <boxGeometry />
+        <meshBasicMaterial color="#000000" />
+      </instancedMesh>
+
       {/* Boundary Wall Collision Bodies (Separate for flawless collision) */}
       <RigidBody type="fixed" name="wall-n" position={[0, 0, -100]} colliders={false} ccd={true}>
         <CuboidCollider args={[100, 6, 0.5]} position={[0, 6, 0]} />
@@ -251,6 +305,12 @@ export function Arena() {
       <instancedMesh ref={obstaclesMeshRef} args={[null, null, obstacleInstances.length]} castShadow={!isMobile} receiveShadow={!isMobile}>
         <boxGeometry />
         <meshStandardMaterial color="#1a1a2e" roughness={0.6} metalness={0.5} />
+      </instancedMesh>
+
+      {/* Obstacle Top Caps (Instanced Black Color) */}
+      <instancedMesh ref={obstacleCapsMeshRef} args={[null, null, obstacleTopCapInstances.length]} castShadow={false} receiveShadow={false}>
+        <boxGeometry />
+        <meshBasicMaterial color="#000000" />
       </instancedMesh>
 
       {/* Obstacle Collision Bodies (Separate for flawless collision) */}
