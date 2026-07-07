@@ -1,12 +1,11 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
-*/
+ */
 
-import { RigidBody, CuboidCollider, CylinderCollider } from '@react-three/rapier';
-import { Grid, Html } from '@react-three/drei';
-import { useFrame } from '@react-three/fiber';
-import { useMemo, useRef, useState, useEffect } from 'react';
+import { InstancedRigidBodies, RigidBody, CuboidCollider } from '@react-three/rapier';
+import { Grid, Text } from '@react-three/drei';
+import { useMemo, useRef, useState, useEffect, useLayoutEffect } from 'react';
 import * as THREE from 'three';
 import { getObstacles } from '../constants';
 import { useGameStore } from '../store';
@@ -33,15 +32,183 @@ function useIsMobile() {
   return isMobile;
 }
 
+const colors: Record<string, string> = {
+  bow: '#39ff14', om: '#39ff14', lotus: '#39ff14', shiva_eye: '#39ff14',
+  chakra: '#ff0055', trishula: '#ff0055', hanuman: '#ff0055',
+  tag1: '#00ffff', tag2: '#ffcc33', cyber: '#9013fe', skull: '#ffffff',
+  neon_bolt: '#ffff00', neon_eye: '#00ffff', neon_grid: '#ff00ff', neon_skull: '#ff5500', neon_gun: '#39ff14'
+};
+
+function getGraffitiText(type: string): string {
+  switch (type) {
+    case 'bow': return '🏹';
+    case 'chakra': return '☸️';
+    case 'hanuman': return '⚔️';
+    case 'om': return 'ॐ';
+    case 'lotus': return '🪷';
+    case 'shiva_eye': return '👁️';
+    case 'trishula': return '🔱';
+    case 'tag1': return 'NEO-T';
+    case 'tag2': return 'CRASH';
+    case 'cyber': return 'VOID';
+    case 'skull': return '💀';
+    case 'neon_bolt': return '⚡';
+    case 'neon_eye': return '👁️';
+    case 'neon_grid': return '🌐';
+    case 'neon_skull': return '💀';
+    case 'neon_gun': return '🔫';
+    default: return '';
+  }
+}
+
+function Graffiti({ type, size, opacity = 1 }: { type: string, size: [number, number, number], opacity?: number }) {
+  const isWide = size[0] > size[2];
+  const sidePos = isWide ? [0, 0, size[2] / 2 + 0.1] : [size[0] / 2 + 0.1, 0, 0];
+  const sideRot = isWide ? [0, 0, 0] : [0, Math.PI / 2, 0];
+  const graffitiScale = Math.min(size[0], size[1], size[2], 8);
+
+  const color = colors[type] || '#ffffff';
+  const text = getGraffitiText(type);
+
+  return (
+    <group position={sidePos as [number, number, number]} rotation={sideRot as [number, number, number]}>
+      <Text
+        color={color}
+        fontSize={graffitiScale * 0.4}
+        maxWidth={graffitiScale}
+        anchorX="center"
+        anchorY="middle"
+        position={[0, 0, 0]}
+      >
+        {text}
+        <meshStandardMaterial 
+          color={color} 
+          emissive={color} 
+          emissiveIntensity={2} 
+          toneMapped={false}
+          transparent
+          opacity={opacity}
+        />
+      </Text>
+    </group>
+  );
+}
+
 export function Arena() {
   const isMobile = useIsMobile();
   const arenaSeed = useGameStore(state => state.arenaSeed);
+  const otherPlayers = useGameStore(state => state.otherPlayers);
   
   const obstacles = useMemo(() => getObstacles(false, arenaSeed), [arenaSeed]);
+
+  // Instancing Wall boundaries (North, South, East, West)
+  const wallInstances = useMemo(() => {
+    return [
+      { key: 'wall-n', position: [0, 6, -100] as [number, number, number], rotation: [0, 0, 0] as [number, number, number], scale: [200, 12, 1] as [number, number, number] },
+      { key: 'wall-s', position: [0, 6, 100] as [number, number, number], rotation: [0, Math.PI, 0] as [number, number, number], scale: [200, 12, 1] as [number, number, number] },
+      { key: 'wall-e', position: [100, 6, 0] as [number, number, number], rotation: [0, -Math.PI / 2, 0] as [number, number, number], scale: [200, 12, 1] as [number, number, number] },
+      { key: 'wall-w', position: [-100, 6, 0] as [number, number, number], rotation: [0, Math.PI / 2, 0] as [number, number, number], scale: [200, 12, 1] as [number, number, number] }
+    ];
+  }, []);
+
+  // Instancing Obstacles
+  const obstacleInstances = useMemo(() => {
+    return obstacles.map((obs, idx) => ({
+      key: `obstacle-${idx}`,
+      position: [obs.position[0], obs.size[1] / 2, obs.position[2]] as [number, number, number],
+      rotation: obs.rotation as [number, number, number],
+      scale: obs.size as [number, number, number]
+    }));
+  }, [obstacles]);
+
+  // Instancing Obstacle Accents
+  const greenAccentInstances = useMemo(() => {
+    return obstacles
+      .map((obs, idx) => ({ obs, idx }))
+      .filter(({ obs }) => obs.color === '#39ff14')
+      .map(({ obs, idx }) => ({
+        key: `green-accent-${idx}`,
+        position: [obs.position[0], obs.size[1] - 0.1, obs.position[2]],
+        rotation: obs.rotation,
+        scale: [obs.size[0] + 0.1, 0.2, obs.size[2] + 0.1]
+      }));
+  }, [obstacles]);
+
+  const pinkAccentInstances = useMemo(() => {
+    return obstacles
+      .map((obs, idx) => ({ obs, idx }))
+      .filter(({ obs }) => obs.color !== '#39ff14')
+      .map(({ obs, idx }) => ({
+        key: `pink-accent-${idx}`,
+        position: [obs.position[0], obs.size[1] - 0.1, obs.position[2]],
+        rotation: obs.rotation,
+        scale: [obs.size[0] + 0.1, 0.2, obs.size[2] + 0.1]
+      }));
+  }, [obstacles]);
+
+  const wallsMeshRef = useRef<THREE.InstancedMesh>(null);
+  const obstaclesMeshRef = useRef<THREE.InstancedMesh>(null);
+  const greenAccentsMeshRef = useRef<THREE.InstancedMesh>(null);
+  const pinkAccentsMeshRef = useRef<THREE.InstancedMesh>(null);
+
+  const tempObject = useMemo(() => new THREE.Object3D(), []);
+
+  useLayoutEffect(() => {
+    if (wallsMeshRef.current) {
+      wallInstances.forEach((w, idx) => {
+        tempObject.position.set(w.position[0], w.position[1], w.position[2]);
+        tempObject.rotation.set(w.rotation[0], w.rotation[1], w.rotation[2]);
+        tempObject.scale.set(w.scale[0], w.scale[1], w.scale[2]);
+        tempObject.updateMatrix();
+        wallsMeshRef.current!.setMatrixAt(idx, tempObject.matrix);
+      });
+      wallsMeshRef.current.instanceMatrix.needsUpdate = true;
+    }
+  }, [wallInstances, tempObject]);
+
+  useLayoutEffect(() => {
+    if (obstaclesMeshRef.current) {
+      obstacleInstances.forEach((obs, idx) => {
+        tempObject.position.set(obs.position[0], obs.position[1], obs.position[2]);
+        tempObject.rotation.set(obs.rotation[0], obs.rotation[1], obs.rotation[2]);
+        tempObject.scale.set(obs.scale[0], obs.scale[1], obs.scale[2]);
+        tempObject.updateMatrix();
+        obstaclesMeshRef.current!.setMatrixAt(idx, tempObject.matrix);
+      });
+      obstaclesMeshRef.current.instanceMatrix.needsUpdate = true;
+    }
+  }, [obstacleInstances, tempObject]);
+
+  useLayoutEffect(() => {
+    if (greenAccentsMeshRef.current) {
+      greenAccentInstances.forEach((accent, idx) => {
+        tempObject.position.set(accent.position[0], accent.position[1], accent.position[2]);
+        tempObject.rotation.set(accent.rotation[0], accent.rotation[1], accent.rotation[2]);
+        tempObject.scale.set(accent.scale[0], accent.scale[1], accent.scale[2]);
+        tempObject.updateMatrix();
+        greenAccentsMeshRef.current!.setMatrixAt(idx, tempObject.matrix);
+      });
+      greenAccentsMeshRef.current.instanceMatrix.needsUpdate = true;
+    }
+  }, [greenAccentInstances, tempObject]);
+
+  useLayoutEffect(() => {
+    if (pinkAccentsMeshRef.current) {
+      pinkAccentInstances.forEach((accent, idx) => {
+        tempObject.position.set(accent.position[0], accent.position[1], accent.position[2]);
+        tempObject.rotation.set(accent.rotation[0], accent.rotation[1], accent.rotation[2]);
+        tempObject.scale.set(accent.scale[0], accent.scale[1], accent.scale[2]);
+        tempObject.updateMatrix();
+        pinkAccentsMeshRef.current!.setMatrixAt(idx, tempObject.matrix);
+      });
+      pinkAccentsMeshRef.current.instanceMatrix.needsUpdate = true;
+    }
+  }, [pinkAccentInstances, tempObject]);
 
   return (
     <group>
       <Tasks />
+
       {/* Floor */}
       <RigidBody type="fixed" name="floor" friction={1} colliders={false} ccd={true}>
         <mesh receiveShadow={!isMobile} position={[0, -0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -61,248 +228,84 @@ export function Arena() {
         </mesh>
       </group>
 
-      {/* Walls */}
-      <Wall name="wall-n" position={[0, 0, -100]} rotation={[0, 0, 0]} isMobile={isMobile} graffiti={['neon_bolt', 'om', 'neon_gun', 'tag1', 'neon_eye']} />
-      <Wall name="wall-s" position={[0, 0, 100]} rotation={[0, Math.PI, 0]} isMobile={isMobile} graffiti={['neon_grid', 'chakra', 'neon_skull', 'tag2', 'cyber']} />
-      <Wall name="wall-e" position={[100, 0, 0]} rotation={[0, -Math.PI / 2, 0]} isMobile={isMobile} graffiti={['neon_eye', 'lotus', 'neon_bolt', 'hanuman', 'skull']} />
-      <Wall name="wall-w" position={[-100, 0, 0]} rotation={[0, Math.PI / 2, 0]} isMobile={isMobile} graffiti={['neon_gun', 'shiva_eye', 'neon_grid', 'om', 'neon_skull']} />
- 
-      {/* Obstacles */}
-      {obstacles.map((obs, i) => {
-        if (!obs) return null;
-        return (
-          <RigidBody 
-            key={`obstacle-${arenaSeed}-${i}`} 
-            type="fixed" 
-            colliders={false}
-            name={`obstacle-${i}`}
-            position={[obs.position[0], 0, obs.position[2]]}
-            rotation={obs.rotation as [number, number, number]}
-          >
-            {obs.type === 'box' ? (
-              <CuboidCollider args={[obs.size[0] / 2, obs.size[1] / 2, obs.size[2] / 2]} position={[0, obs.size[1] / 2, 0]} />
-            ) : (
-              <CylinderCollider args={[obs.size[1] / 2, obs.size[0] / 2]} position={[0, obs.size[1] / 2, 0]} />
-            )}
-            <group position={[0, obs.size[1] / 2, 0]}>
-              <mesh receiveShadow={!isMobile} castShadow={!isMobile}>
-                {obs.type === 'box' ? (
-                  <boxGeometry args={obs.size as [number, number, number]} />
-                ) : (
-                  <cylinderGeometry args={[obs.size[0]/2, obs.size[0]/2, obs.size[1], 16]} />
-                )}
-                <meshStandardMaterial color="#1a1a2e" roughness={0.6} metalness={0.5} />
-                
-                {/* Neon accent on obstacles */}
-                <mesh position={[0, obs.size[1]/2 - 0.5, 0]}>
-                  {obs.type === 'box' ? (
-                    <boxGeometry args={[obs.size[0] + 0.1, 0.2, obs.size[2] + 0.1]} />
-                  ) : (
-                    <cylinderGeometry args={[obs.size[0]/2 + 0.1, obs.size[0]/2 + 0.1, 0.2, 16]} />
-                  )}
-                  <meshBasicMaterial color={obs.color} toneMapped={false} />
-                </mesh>
-  
-                {/* Graffiti on large walls */}
-                {obs.graffitiType && obs.type === 'box' && (
-                  <Graffiti type={obs.graffitiType} size={obs.size} />
-                )}
-              </mesh>
-            </group>
-          </RigidBody>
-        );
-      })}
-    </group>
-  );
-}
+      {/* Instanced Boundary Walls */}
+      <InstancedRigidBodies instances={wallInstances} type="fixed" colliders="cuboid">
+        <instancedMesh ref={wallsMeshRef} args={[null, null, 4]} castShadow={!isMobile} receiveShadow={!isMobile}>
+          <boxGeometry />
+          <meshStandardMaterial color="#0a0a25" roughness={0.4} metalness={0.6} />
+        </instancedMesh>
+      </InstancedRigidBodies>
 
-function Graffiti({ type, size, opacity = 1 }: { type: 'bow' | 'chakra' | 'hanuman' | 'om' | 'lotus' | 'shiva_eye' | 'trishula' | 'tag1' | 'tag2' | 'cyber' | 'skull' | 'neon_bolt' | 'neon_eye' | 'neon_grid' | 'neon_skull' | 'neon_gun', size: [number, number, number], opacity?: number }) {
-  // Determine which side to put graffiti on
-  const isWide = size[0] > size[2];
-  const sidePos = isWide ? [0, 0, size[2] / 2 + 0.05] : [size[0] / 2 + 0.05, 0, 0];
-  const sideRot = isWide ? [0, 0, 0] : [0, Math.PI / 2, 0];
-  const graffitiScale = Math.min(size[0], size[1], size[2], 8);
+      {/* Instanced Obstacles */}
+      <InstancedRigidBodies instances={obstacleInstances} type="fixed" colliders="cuboid">
+        <instancedMesh ref={obstaclesMeshRef} args={[null, null, obstacleInstances.length]} castShadow={!isMobile} receiveShadow={!isMobile}>
+          <boxGeometry />
+          <meshStandardMaterial color="#1a1a2e" roughness={0.6} metalness={0.5} />
+        </instancedMesh>
+      </InstancedRigidBodies>
 
-  const getGraffitiContent = () => {
-    switch (type) {
-      case 'bow':
-        return (
-          <>
-            <path d="M5,15 Q15,0 25,15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            <line x1="15" y1="2" x2="15" y2="25" stroke="currentColor" strokeWidth="1" />
-            <path d="M12,25 L15,28 L18,25" fill="none" stroke="currentColor" strokeWidth="1.5" />
-          </>
-        );
-      case 'chakra':
-        return (
-          <>
-            <circle cx="15" cy="15" r="12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2,2" />
-            <circle cx="15" cy="15" r="9" fill="none" stroke="currentColor" strokeWidth="1" />
-            <circle cx="15" cy="15" r="2" fill="currentColor" />
-            {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map(deg => (
-              <line key={deg} x1="15" y1="15" x2={15 + 9 * Math.cos(deg * Math.PI / 180)} y2={15 + 9 * Math.sin(deg * Math.PI / 180)} stroke="currentColor" strokeWidth="0.8" />
-            ))}
-          </>
-        );
-      case 'hanuman':
-        return (
-          <path d="M15,2 L15,18 M8,22 C8,18 22,18 22,22 L22,28 C22,32 8,32 8,28 Z M15,18 L10,22 M15,18 L20,22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-        );
-      case 'om':
-        return (
-          <text x="15" y="22" textAnchor="middle" fontSize="22" fill="currentColor" fontFamily="serif" style={{fontWeight: 'bold'}}>ॐ</text>
-        );
-      case 'lotus':
-        return (
-          <path d="M15,25 Q10,15 15,5 Q20,15 15,25 M15,25 Q5,15 10,20 Q15,25 15,25 M15,25 Q25,15 20,20 Q15,25 15,25" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-        );
-      case 'shiva_eye':
-        return (
-          <>
-            <path d="M5,15 Q15,5 25,15 Q15,25 5,15" fill="none" stroke="currentColor" strokeWidth="1.5" />
-            <circle cx="15" cy="15" r="4" fill="none" stroke="currentColor" strokeWidth="1" />
-            <circle cx="15" cy="15" r="1.5" fill="currentColor" />
-            <path d="M15,8 L15,12 M15,18 L15,22" stroke="currentColor" strokeWidth="1" />
-          </>
-        );
-      case 'trishula':
-        return (
-          <path d="M15,25 L15,5 M5,10 Q15,15 25,10 M15,5 L12,8 M15,5 L18,8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-        );
-      case 'tag1':
-        return (
-          <text x="15" y="20" textAnchor="middle" fontSize="18" fill="currentColor" fontFamily="cursive" transform="rotate(-15, 15, 20)">NEO-T</text>
-        );
-      case 'tag2':
-        return (
-          <text x="15" y="22" textAnchor="middle" fontSize="24" fill="currentColor" fontFamily="Impact" style={{letterSpacing: '-2px'}}>CRASH</text>
-        );
-      case 'cyber':
-        return (
-          <text x="15" y="20" textAnchor="middle" fontSize="12" fill="currentColor" fontFamily="monospace">0101_VOID</text>
-        );
-      case 'skull':
-        return (
-          <>
-            <path d="M10,10 Q15,0 20,10 L22,25 Q15,30 8,25 Z" fill="currentColor" />
-            <circle cx="12" cy="15" r="2.5" fill="#000" />
-            <circle cx="18" cy="15" r="2.5" fill="#000" />
-            <rect x="13" y="22" width="4" height="3" fill="#000" />
-          </>
-        );
-      case 'neon_bolt':
-        return (
-          <path d="M18,2 L8,16 L14,16 L12,28 L22,14 L16,14 Z" fill="currentColor" />
-        );
-      case 'neon_eye':
-        return (
-          <>
-            <path d="M2,15 Q15,2 28,15 Q15,28 2,15" fill="none" stroke="currentColor" strokeWidth="2" />
-            <circle cx="15" cy="15" r="6" fill="none" stroke="currentColor" strokeWidth="1.5" />
-            <circle cx="15" cy="15" r="2" fill="currentColor" />
-            <path d="M15,5 L15,8 M15,22 L15,25 M5,15 L8,15 M22,15 L25,15" stroke="currentColor" strokeWidth="1" />
-          </>
-        );
-      case 'neon_grid':
-        return (
-          <>
-            <path d="M0,15 L30,15 M0,20 L30,20 M0,25 L30,25" stroke="currentColor" strokeWidth="0.5" />
-            <path d="M15,10 L0,30 M15,10 L30,30 M15,10 L15,30" stroke="currentColor" strokeWidth="0.5" />
-          </>
-        );
-      case 'neon_skull':
-        return (
-          <path d="M8,10 A7,7 0 1,1 22,10 A7,7 0 0,1 22,16 L20,24 L10,24 L8,16 A7,7 0 0,1 8,10 Z M12,13 A1,1 0 1,0 12,14 Z M18,13 A1,1 0 1,0 18,14 Z" fill="none" stroke="currentColor" strokeWidth="2" />
-        );
-      case 'neon_gun':
-        return (
-          <path d="M5,10 L25,10 L25,15 L15,15 L15,25 L10,25 L10,15 L5,15 Z" fill="currentColor" />
-        );
-    }
-  };
+      {/* Instanced Visual Accents */}
+      <instancedMesh ref={greenAccentsMeshRef} args={[null, null, greenAccentInstances.length]} castShadow={false} receiveShadow={false}>
+        <boxGeometry />
+        <meshBasicMaterial color="#39ff14" toneMapped={false} />
+      </instancedMesh>
 
-  const colors: Record<string, string> = {
-    bow: '#39ff14', om: '#39ff14', lotus: '#39ff14', shiva_eye: '#39ff14',
-    chakra: '#ff0055', trishula: '#ff0055', hanuman: '#ff0055',
-    tag1: '#00ffff', tag2: '#ffcc33', cyber: '#9013fe', skull: '#ffffff',
-    neon_bolt: '#ffff00', neon_eye: '#00ffff', neon_grid: '#ff00ff', neon_skull: '#ff5500', neon_gun: '#39ff14'
-  };
-  const color = colors[type] || '#ffffff';
+      <instancedMesh ref={pinkAccentsMeshRef} args={[null, null, pinkAccentInstances.length]} castShadow={false} receiveShadow={false}>
+        <boxGeometry />
+        <meshBasicMaterial color="#ff0055" toneMapped={false} />
+      </instancedMesh>
 
-  return (
-    <group position={sidePos as [number, number, number]} rotation={sideRot as [number, number, number]}>
-      <mesh>
-        <planeGeometry args={[graffitiScale, graffitiScale]} />
-        <meshBasicMaterial transparent opacity={0} />
-      </mesh>
-      <group scale={[graffitiScale/30, -graffitiScale/30, 1]} position={[-graffitiScale/2, graffitiScale/2, 0.01]}>
-         <Html transform distanceFactor={graffitiScale * 1.5} pointerEvents="none" portal={{ current: undefined }}>
-            <div style={{ 
-              color, 
-              opacity,
-              filter: `drop-shadow(0 0 8px ${color})`, 
-              width: '120px', 
-              height: '120px', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              animation: 'flicker 3s infinite'
-            }}>
-              <style>{`
-                @keyframes flicker {
-                  0%, 100% { opacity: 0.8; }
-                  50% { opacity: 1; }
-                  45%, 55% { opacity: 0.7; }
-                }
-              `}</style>
-              <svg viewBox="0 0 30 30" width="100%" height="100%">
-                {getGraffitiContent()}
-              </svg>
-            </div>
-         </Html>
-      </group>
-    </group>
-  );
-}
+      {/* Decorative Wall Accents & Lines */}
+      {wallInstances.map((w, idx) => (
+        <group key={`wall-lines-${idx}`} position={[w.position[0], 0, w.position[2]]} rotation={w.rotation as [number, number, number]}>
+          {/* Glowing Base Line */}
+          <mesh position={[0, 0.25, 0.6]}>
+            <planeGeometry args={[200, 0.5]} />
+            <meshBasicMaterial color="#ff0055" toneMapped={false} />
+          </mesh>
+          {/* Glowing Top Line */}
+          <mesh position={[0, 11.75, 0.6]}>
+            <planeGeometry args={[200, 0.5]} />
+            <meshBasicMaterial color="#39ff14" toneMapped={false} />
+          </mesh>
+        </group>
+      ))}
 
-function Wall({ name, position, rotation, isMobile, graffiti = [] }: { name: string, position: [number, number, number], rotation: [number, number, number], isMobile: boolean, graffiti?: ('bow' | 'chakra' | 'hanuman' | 'om' | 'lotus' | 'shiva_eye' | 'trishula' | 'tag1' | 'tag2' | 'cyber' | 'skull' | 'neon_bolt' | 'neon_eye' | 'neon_grid' | 'neon_skull' | 'neon_gun')[] }) {
-  return (
-    <RigidBody type="fixed" name={name} position={[position[0], 0, position[2]]} rotation={rotation} colliders={false} ccd={true}>
-      <CuboidCollider args={[100, 6, 0.5]} position={[0, 6, 0]} />
-      {/* Solid Wall */}
-      <mesh position={[0, 6, 0]}>
-        <boxGeometry args={[200, 12, 1]} />
-        <meshStandardMaterial color="#0a0a25" roughness={0.4} metalness={0.6} />
-      </mesh>
-      
-      {/* Decorative Panels */}
-      <mesh position={[0, 6, 0.51]}>
-        <planeGeometry args={[200, 12]} />
-        <meshStandardMaterial 
-          color="#1a1a3a" 
-          transparent 
-          opacity={0.3} 
-          roughness={0.2}
-        />
-      </mesh>
-
-      {/* Graffiti on walls */}
-      {graffiti.map((type, i) => (
-        <group key={`${type}-${i}`} position={[(i - (graffiti.length - 1) / 2) * 40 - 20, 6, 0.52]}>
+      {/* Wall Graffiti */}
+      {/* North Wall Graffiti */}
+      {['neon_bolt', 'om', 'neon_gun', 'tag1', 'neon_eye'].map((type, i) => (
+        <group key={`n-graffiti-${i}`} position={[(i - 2) * 40 - 20, 6, -99.4]} rotation={[0, 0, 0]}>
+          <Graffiti type={type} size={[12, 12, 1]} opacity={0.7} />
+        </group>
+      ))}
+      {/* South Wall Graffiti */}
+      {['neon_grid', 'chakra', 'neon_skull', 'tag2', 'cyber'].map((type, i) => (
+        <group key={`s-graffiti-${i}`} position={[(i - 2) * 40 - 20, 6, 99.4]} rotation={[0, Math.PI, 0]}>
+          <Graffiti type={type} size={[12, 12, 1]} opacity={0.7} />
+        </group>
+      ))}
+      {/* East Wall Graffiti */}
+      {['neon_eye', 'lotus', 'neon_bolt', 'hanuman', 'skull'].map((type, i) => (
+        <group key={`e-graffiti-${i}`} position={[99.4, 6, (i - 2) * 40 - 20]} rotation={[0, -Math.PI / 2, 0]}>
+          <Graffiti type={type} size={[12, 12, 1]} opacity={0.7} />
+        </group>
+      ))}
+      {/* West Wall Graffiti */}
+      {['neon_gun', 'shiva_eye', 'neon_grid', 'om', 'neon_skull'].map((type, i) => (
+        <group key={`w-graffiti-${i}`} position={[-99.4, 6, (i - 2) * 40 - 20]} rotation={[0, Math.PI / 2, 0]}>
           <Graffiti type={type} size={[12, 12, 1]} opacity={0.7} />
         </group>
       ))}
 
-      {/* Glowing Base Line */}
-      <mesh position={[0, 0.25, 0.6]}>
-        <planeGeometry args={[200, 0.5]} />
-        <meshBasicMaterial color="#ff0055" toneMapped={false} />
-      </mesh>
-      {/* Glowing Top Line */}
-      <mesh position={[0, 11.75, 0.6]}>
-        <planeGeometry args={[200, 0.5]} />
-        <meshBasicMaterial color="#39ff14" toneMapped={false} />
-      </mesh>
-    </RigidBody>
+      {/* Obstacle Graffiti */}
+      {obstacles.map((obs, i) => {
+        if (!obs || !obs.graffitiType || obs.type !== 'box') return null;
+        return (
+          <group key={`obs-graffiti-${i}`} position={[obs.position[0], obs.size[1] / 2, obs.position[2]]} rotation={obs.rotation as [number, number, number]}>
+            <Graffiti type={obs.graffitiType} size={obs.size} />
+          </group>
+        );
+      })}
+    </group>
   );
 }
