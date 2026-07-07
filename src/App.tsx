@@ -384,7 +384,7 @@ export default function App() {
 
       {/* Waiting / Lobby UI */}
       {gameState === 'waiting' && (
-        <div className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center z-[140] pointer-events-auto backdrop-blur-xl transition-all duration-500">
+        <div className="absolute inset-0 bg-black/95 overflow-y-auto flex flex-col items-center justify-start md:justify-center py-6 md:py-12 z-[140] pointer-events-auto backdrop-blur-xl transition-all duration-500">
           {/* Global Back Arrow */}
           <button 
             onClick={() => useGameStore.getState().leaveGame()}
@@ -396,7 +396,7 @@ export default function App() {
             <span className="font-black uppercase text-xs tracking-widest hidden md:block">Return to Base</span>
           </button>
 
-          <div className="flex flex-col items-center gap-8 max-w-xl w-full px-6">
+          <div className="flex flex-col items-center gap-4 md:gap-6 max-w-xl w-full px-6 my-auto">
             <div className="relative text-center">
               <h2 className="text-5xl md:text-7xl font-black text-lime-400 tracking-tighter uppercase italic animate-pulse">
                 Establishing Link
@@ -406,11 +406,11 @@ export default function App() {
               </div>
             </div>
 
-            <div className="w-full bg-[#050a05] border-2 border-lime-400/20 p-8 rounded-2xl flex flex-col gap-8 shadow-[0_0_50px_rgba(163,230,53,0.15)] relative overflow-hidden">
+            <div className="w-full bg-[#050a05]/95 border-2 border-lime-400/20 p-6 md:p-8 rounded-2xl flex flex-col gap-5 md:gap-6 shadow-[0_0_50px_rgba(163,230,53,0.15)] relative overflow-hidden">
               {/* Scanline Effect */}
               <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(163,230,53,0.03)_50%,transparent_50%)] bg-[length:100%_4px] opacity-50" />
               
-              <div className="flex justify-between items-end border-b border-lime-400/10 pb-6 relative z-10">
+              <div className="flex justify-between items-end border-b border-lime-400/10 pb-4 relative z-10">
                 <div className="flex flex-col gap-1">
                   <span className="text-lime-400/40 font-black uppercase text-[10px] tracking-widest">Active Sector</span>
                   <span className="text-lime-400 font-black text-2xl tracking-[0.1em]">{roomCode}</span>
