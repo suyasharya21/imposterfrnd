@@ -26,6 +26,7 @@ function HUD() {
   const playerCount = Object.keys(otherPlayers).length + 1;
   const leaveGame = useGameStore(state => state.leaveGame);
   const isMobile = useIsMobile();
+  const playerName = useGameStore(state => state.playerName);
 
   const enemies = useGameStore(state => state.enemies);
   const gameMode = useGameStore(state => state.gameMode);
@@ -33,7 +34,7 @@ function HUD() {
 
   const leaderboard = useMemo(() => {
     const players = [
-      { id: 'You', score: score, isMe: true },
+      { id: playerName, score: score, isMe: true },
       ...Object.values(otherPlayers).map(p => ({
         id: p.name,
         score: p.score,
@@ -47,7 +48,7 @@ function HUD() {
     ];
     // Sort by score descending and take top 4
     return players.sort((a, b) => b.score - a.score).slice(0, 4);
-  }, [score, otherPlayers, enemies]);
+  }, [score, otherPlayers, enemies, playerName]);
 
   return (
     <>
