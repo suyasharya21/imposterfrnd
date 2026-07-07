@@ -127,7 +127,7 @@ export function Player() {
     
     // Set weapon parameters
     let range = MAX_LASER_DIST;
-    let cooldown = 200;
+    let cooldown = 350;
     let particleColor = '#39ff14';
     let damage = 2; // Gun takes 1 shot (HP=2)
 
