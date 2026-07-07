@@ -86,6 +86,7 @@ export function Player() {
   const lastEmitTime = useRef(0);
   const lastShootTime = useRef(0);
   const isMouseDown = useRef(false);
+  const lastMobileShooting = useRef(false);
   const lastSpacePressed = useRef(false);
 
   const gunGroupRef = useRef<THREE.Group>(null);
@@ -258,9 +259,16 @@ export function Player() {
     const mobileInput = useGameStore.getState().mobileInput;
 
     // Handle Shooting (Mouse or Mobile)
-    if (isMouseDown.current || mobileInput.shooting) {
+    const isShootingPressed = isMouseDown.current || mobileInput.shooting;
+    const justPressedMobile = mobileInput.shooting && !lastMobileShooting.current;
+
+    if (isShootingPressed && currentWeapon === 'gun') {
+      shoot();
+    } else if (justPressedMobile && currentWeapon !== 'gun') {
       shoot();
     }
+    
+    lastMobileShooting.current = mobileInput.shooting;
 
     // Movement
     const velocity = body.current.linvel();
