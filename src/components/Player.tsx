@@ -85,6 +85,7 @@ export function Player() {
   });
   const lastEmitTime = useRef(0);
   const lastShootTime = useRef(0);
+  const isMouseDown = useRef(false);
   const lastSpacePressed = useRef(false);
 
   const gunGroupRef = useRef<THREE.Group>(null);
@@ -236,6 +237,10 @@ export function Player() {
   useFrame((_, delta) => {
     if (!body.current || gameState !== 'playing') return;
 
+    if (!document.pointerLockElement) {
+      isMouseDown.current = false;
+    }
+
     const forcedPosition = useGameStore.getState().forcedPosition;
     if (forcedPosition) {
       body.current.setTranslation({ x: forcedPosition[0], y: forcedPosition[1], z: forcedPosition[2] }, true);
@@ -252,8 +257,8 @@ export function Player() {
     
     const mobileInput = useGameStore.getState().mobileInput;
 
-    // Handle Mobile Shooting
-    if (mobileInput.shooting) {
+    // Handle Shooting (Mouse or Mobile)
+    if (isMouseDown.current || mobileInput.shooting) {
       shoot();
     }
 
@@ -468,6 +473,7 @@ export function Player() {
     const handleMouseDown = (e: MouseEvent) => {
       // Only shoot on left click (button 0)
       if (e.button === 0 && document.pointerLockElement && gameState === 'playing' && playerState === 'active') {
+        isMouseDown.current = true;
         shoot();
       }
       // Cycle weapon on right click (button 2)
@@ -475,14 +481,22 @@ export function Player() {
         cycleWeapon();
       }
     };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      if (e.button === 0) {
+        isMouseDown.current = false;
+      }
+    };
     
     // Prevent context menu on right click
     const handleContextMenu = (e: MouseEvent) => e.preventDefault();
 
     window.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mouseup', handleMouseUp);
     window.addEventListener('contextmenu', handleContextMenu);
     return () => {
       window.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('contextmenu', handleContextMenu);
     };
   }, [gameState, playerState, shoot]);
