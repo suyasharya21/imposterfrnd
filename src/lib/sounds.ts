@@ -157,19 +157,37 @@ class SoundManager {
     
     // Deep sub bass boom
     const sub = this.createOscillator(55, 'sawtooth');
-    sub.osc.frequency.exponentialRampToValueAtTime(20, now + 1.8);
+    sub.osc.frequency.exponentialRampToValueAtTime(20, now + 2.0);
     sub.gain.gain.setValueAtTime(0.7, now);
-    sub.gain.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
+    sub.gain.gain.exponentialRampToValueAtTime(0.001, now + 2.0);
     sub.osc.start(now);
-    sub.osc.stop(now + 1.8);
+    sub.osc.stop(now + 2.0);
 
     // High frequency cyber swoosh
     const swoosh = this.createOscillator(1000, 'sine');
-    swoosh.osc.frequency.exponentialRampToValueAtTime(100, now + 0.8);
+    swoosh.osc.frequency.exponentialRampToValueAtTime(100, now + 1.2);
     swoosh.gain.gain.setValueAtTime(0.2, now);
-    swoosh.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+    swoosh.gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
     swoosh.osc.start(now);
-    swoosh.osc.stop(now + 0.8);
+    swoosh.osc.stop(now + 1.2);
+
+    // Dynamic boot chirps
+    const playChirp = (delay: number, freq: number, duration: number = 0.08) => {
+      setTimeout(() => {
+        if (this.ctx?.state === 'suspended') return;
+        const { osc, gain } = this.createOscillator(freq, 'square');
+        const t = this.ctx!.currentTime;
+        gain.gain.setValueAtTime(0.05, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+        osc.start(t);
+        osc.stop(t + duration);
+      }, delay * 1000);
+    };
+
+    playChirp(0.15, 660);
+    playChirp(0.3, 880);
+    playChirp(0.45, 1200);
+    playChirp(0.6, 1760, 0.15);
   }
 
   startMenuBGM() {
