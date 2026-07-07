@@ -465,6 +465,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (state.ammo[weapon] <= 0) return false;
     
     if (state.ammo[weapon] !== Infinity) {
+      if (weapon === 'gun' && Math.random() > 0.5) {
+        return true;
+      }
       set((s) => ({
         ammo: {
           ...s.ammo,
