@@ -87,6 +87,10 @@ export function Player() {
   const lastShootTime = useRef(0);
   const isMouseDown = useRef(false);
   const lastMobileShooting = useRef(false);
+  const pressStartTime = useRef(0);
+  const burstCount = useRef(0);
+  const lastBurstShotTime = useRef(0);
+  const isBurstActive = useRef(false);
   const lastSpacePressed = useRef(false);
 
   const gunGroupRef = useRef<THREE.Group>(null);
@@ -128,7 +132,7 @@ export function Player() {
     
     // Set weapon parameters
     let range = MAX_LASER_DIST;
-    let cooldown = 350;
+    let cooldown = 100;
     let particleColor = '#39ff14';
     let damage = 2; // Gun takes 1 shot (HP=2)
 
@@ -240,6 +244,9 @@ export function Player() {
 
     if (!document.pointerLockElement) {
       isMouseDown.current = false;
+      pressStartTime.current = 0;
+      burstCount.current = 0;
+      isBurstActive.current = false;
     }
 
     const forcedPosition = useGameStore.getState().forcedPosition;
@@ -262,10 +269,38 @@ export function Player() {
     const isShootingPressed = isMouseDown.current || mobileInput.shooting;
     const justPressedMobile = mobileInput.shooting && !lastMobileShooting.current;
 
-    if (isShootingPressed && currentWeapon === 'gun') {
-      shoot();
-    } else if (justPressedMobile && currentWeapon !== 'gun') {
-      shoot();
+    if (currentWeapon === 'gun') {
+      if (isShootingPressed) {
+        // If it's a mobile touch start, initialize burst variables
+        if (justPressedMobile) {
+          pressStartTime.current = Date.now();
+          burstCount.current = 1;
+          lastBurstShotTime.current = Date.now();
+          isBurstActive.current = false;
+          shoot(); // Fire 1st shot instantly
+        }
+
+        const holdDuration = now - pressStartTime.current;
+
+        // Long press threshold: 250ms
+        if (holdDuration > 250 && pressStartTime.current > 0) {
+          isBurstActive.current = true;
+        }
+
+        if (isBurstActive.current && burstCount.current < 7) {
+          // Fire subsequent burst shots every 100ms
+          if (now - lastBurstShotTime.current > 100) {
+            shoot();
+            burstCount.current += 1;
+            lastBurstShotTime.current = now;
+          }
+        }
+      }
+    } else {
+      // Other weapons (like pistol) are strictly semi-automatic
+      if (justPressedMobile) {
+        shoot();
+      }
     }
     
     lastMobileShooting.current = mobileInput.shooting;
@@ -482,7 +517,16 @@ export function Player() {
       // Only shoot on left click (button 0)
       if (e.button === 0 && document.pointerLockElement && gameState === 'playing' && playerState === 'active') {
         isMouseDown.current = true;
-        shoot();
+
+        if (currentWeapon === 'gun') {
+          pressStartTime.current = Date.now();
+          burstCount.current = 1;
+          lastBurstShotTime.current = Date.now();
+          isBurstActive.current = false;
+          shoot(); // Fire 1st shot instantly on click down
+        } else {
+          shoot();
+        }
       }
       // Cycle weapon on right click (button 2)
       if (e.button === 2 && document.pointerLockElement) {
@@ -493,6 +537,9 @@ export function Player() {
     const handleMouseUp = (e: MouseEvent) => {
       if (e.button === 0) {
         isMouseDown.current = false;
+        pressStartTime.current = 0;
+        burstCount.current = 0;
+        isBurstActive.current = false;
       }
     };
     
@@ -507,7 +554,7 @@ export function Player() {
       window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('contextmenu', handleContextMenu);
     };
-  }, [gameState, playerState, shoot]);
+  }, [gameState, playerState, currentWeapon, shoot]);
 
   const isMobile = useIsMobile();
   
