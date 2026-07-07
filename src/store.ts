@@ -302,7 +302,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         arenaSeed,
         enemies,
         coins,
-        lives: 5,
+        lives: 3,
         ammo: { gun: 100, pistol: 100, knife: Infinity },
         otherPlayers: {},
         role: 'crewmate',
@@ -985,7 +985,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       coins: newCoins,
       timeLeft: state.timeLeft + 30,
       ammo: { gun: 100, pistol: 100, knife: Infinity },
-      lives: Math.min(5, state.lives + 1), // bonus life reward
+      lives: Math.min(3, state.lives + 1), // bonus life reward
       forcedPosition: [0, 1, 0], // teleport player back to center spawn point
       events: [...state.events, {
         id: Math.random().toString(),
