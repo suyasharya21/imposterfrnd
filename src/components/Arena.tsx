@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { InstancedRigidBodies, RigidBody, CuboidCollider } from '@react-three/rapier';
+import { RigidBody, CuboidCollider, CylinderCollider } from '@react-three/rapier';
 import { Grid, Text } from '@react-three/drei';
 import { useMemo, useRef, useState, useEffect, useLayoutEffect } from 'react';
 import * as THREE from 'three';
@@ -97,7 +97,6 @@ function Graffiti({ type, size, opacity = 1 }: { type: string, size: [number, nu
 export function Arena() {
   const isMobile = useIsMobile();
   const arenaSeed = useGameStore(state => state.arenaSeed);
-  const otherPlayers = useGameStore(state => state.otherPlayers);
   
   const obstacles = useMemo(() => getObstacles(false, arenaSeed), [arenaSeed]);
 
@@ -209,7 +208,7 @@ export function Arena() {
     <group>
       <Tasks />
 
-      {/* Floor */}
+      {/* Floor Physics & Visual */}
       <RigidBody type="fixed" name="floor" friction={1} colliders={false} ccd={true}>
         <mesh receiveShadow={!isMobile} position={[0, -0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <planeGeometry args={[200, 200]} />
@@ -228,21 +227,52 @@ export function Arena() {
         </mesh>
       </group>
 
-      {/* Instanced Boundary Walls */}
-      <InstancedRigidBodies instances={wallInstances} type="fixed" colliders="cuboid">
-        <instancedMesh ref={wallsMeshRef} args={[null, null, 4]} castShadow={!isMobile} receiveShadow={!isMobile}>
-          <boxGeometry />
-          <meshStandardMaterial color="#0a0a25" roughness={0.4} metalness={0.6} />
-        </instancedMesh>
-      </InstancedRigidBodies>
+      {/* Solid Boundary Wall Visual Meshes (Instanced) */}
+      <instancedMesh ref={wallsMeshRef} args={[null, null, 4]} castShadow={!isMobile} receiveShadow={!isMobile}>
+        <boxGeometry />
+        <meshStandardMaterial color="#0a0a25" roughness={0.4} metalness={0.6} />
+      </instancedMesh>
 
-      {/* Instanced Obstacles */}
-      <InstancedRigidBodies instances={obstacleInstances} type="fixed" colliders="cuboid">
-        <instancedMesh ref={obstaclesMeshRef} args={[null, null, obstacleInstances.length]} castShadow={!isMobile} receiveShadow={!isMobile}>
-          <boxGeometry />
-          <meshStandardMaterial color="#1a1a2e" roughness={0.6} metalness={0.5} />
-        </instancedMesh>
-      </InstancedRigidBodies>
+      {/* Boundary Wall Collision Bodies (Separate for flawless collision) */}
+      <RigidBody type="fixed" name="wall-n" position={[0, 0, -100]} colliders={false} ccd={true}>
+        <CuboidCollider args={[100, 6, 0.5]} position={[0, 6, 0]} />
+      </RigidBody>
+      <RigidBody type="fixed" name="wall-s" position={[0, 0, 100]} rotation={[0, Math.PI, 0]} colliders={false} ccd={true}>
+        <CuboidCollider args={[100, 6, 0.5]} position={[0, 6, 0]} />
+      </RigidBody>
+      <RigidBody type="fixed" name="wall-e" position={[100, 0, 0]} rotation={[0, -Math.PI / 2, 0]} colliders={false} ccd={true}>
+        <CuboidCollider args={[100, 6, 0.5]} position={[0, 6, 0]} />
+      </RigidBody>
+      <RigidBody type="fixed" name="wall-w" position={[-100, 0, 0]} rotation={[0, Math.PI / 2, 0]} colliders={false} ccd={true}>
+        <CuboidCollider args={[100, 6, 0.5]} position={[0, 6, 0]} />
+      </RigidBody>
+
+      {/* Solid Obstacle Visual Meshes (Instanced) */}
+      <instancedMesh ref={obstaclesMeshRef} args={[null, null, obstacleInstances.length]} castShadow={!isMobile} receiveShadow={!isMobile}>
+        <boxGeometry />
+        <meshStandardMaterial color="#1a1a2e" roughness={0.6} metalness={0.5} />
+      </instancedMesh>
+
+      {/* Obstacle Collision Bodies (Separate for flawless collision) */}
+      {obstacles.map((obs, i) => {
+        if (!obs) return null;
+        return (
+          <RigidBody 
+            key={`obstacle-phys-${arenaSeed}-${i}`} 
+            type="fixed" 
+            colliders={false}
+            name={`obstacle-${i}`}
+            position={[obs.position[0], 0, obs.position[2]]}
+            rotation={obs.rotation as [number, number, number]}
+          >
+            {obs.type === 'box' ? (
+              <CuboidCollider args={[obs.size[0] / 2, obs.size[1] / 2, obs.size[2] / 2]} position={[0, obs.size[1] / 2, 0]} />
+            ) : (
+              <CylinderCollider args={[obs.size[1] / 2, obs.size[0] / 2]} position={[0, obs.size[1] / 2, 0]} />
+            )}
+          </RigidBody>
+        );
+      })}
 
       {/* Instanced Visual Accents */}
       <instancedMesh ref={greenAccentsMeshRef} args={[null, null, greenAccentInstances.length]} castShadow={false} receiveShadow={false}>
