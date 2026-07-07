@@ -65,29 +65,35 @@ function Graffiti({ type, size, opacity = 1 }: { type: string, size: [number, nu
   const isWide = size[0] > size[2];
   const sidePos = isWide ? [0, 0, size[2] / 2 + 0.1] : [size[0] / 2 + 0.1, 0, 0];
   const sideRot = isWide ? [0, 0, 0] : [0, Math.PI / 2, 0];
-  const graffitiScale = Math.min(size[0], size[1], size[2], 8);
+  const graffitiScale = Math.min(size[0], size[1], size[2], 14);
 
   const color = colors[type] || '#ffffff';
   const text = getGraffitiText(type);
+  const baseOpacity = opacity * 0.45;
 
   return (
     <group position={sidePos as [number, number, number]} rotation={sideRot as [number, number, number]}>
       <Text
         color={color}
-        fontSize={graffitiScale * 0.4}
-        maxWidth={graffitiScale}
+        fontSize={graffitiScale * 0.75}
+        maxWidth={graffitiScale * 1.5}
         anchorX="center"
         anchorY="middle"
         position={[0, 0, 0]}
+        outlineWidth={graffitiScale * 0.03}
+        outlineColor="#000000"
+        outlineOpacity={baseOpacity * 0.8}
       >
         {text}
         <meshStandardMaterial 
           color={color} 
           emissive={color} 
-          emissiveIntensity={2} 
+          emissiveIntensity={1.2} 
           toneMapped={false}
           transparent
-          opacity={opacity}
+          opacity={baseOpacity}
+          roughness={0.9}
+          metalness={0.1}
         />
       </Text>
     </group>
