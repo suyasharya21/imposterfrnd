@@ -61,15 +61,23 @@ async function startServer() {
   const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
   const httpServer = createServer(app);
 
-  const pubClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+  const pubClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+    maxRetriesPerRequest: null,
+    enableOfflineQueue: false
+  });
   const subClient = pubClient.duplicate();
 
-  pubClient.on('error', (err) => {
-    console.error('Redis pubClient error:', err.message);
-  });
-  subClient.on('error', (err) => {
-    console.error('Redis subClient error:', err.message);
-  });
+  let lastErrorTime = 0;
+  const logRedisError = (type: string, err: any) => {
+    const now = Date.now();
+    if (now - lastErrorTime > 30000) { // Log at most once every 30 seconds
+      console.warn(`[Redis Connection Warning] ${type} error: ${err.message}. Server is running in local fallback mode.`);
+      lastErrorTime = now;
+    }
+  };
+
+  pubClient.on('error', (err) => logRedisError('pubClient', err));
+  subClient.on('error', (err) => logRedisError('subClient', err));
 
   const io = new Server(httpServer, {
     cors: { origin: '*' },
