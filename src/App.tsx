@@ -350,7 +350,7 @@ export default function App() {
             <div className="backdrop-blur-xl bg-black/60 border border-lime-400/10 px-10 py-8 rounded-2xl shadow-[0_0_40px_rgba(163,230,53,0.1)] flex flex-col items-center gap-2 animate-in fade-in zoom-in-95 duration-700">
               <span className="text-[10px] text-lime-400/40 font-black tracking-[0.3em] uppercase">Developed By</span>
               <h2 className="text-lime-400 text-3xl md:text-5xl font-black tracking-[0.25em] uppercase animate-glitch animate-neon-glow">
-                ANTIGRAVITY SYSTEMS
+                AI GAME HOUSE
               </h2>
               <span className="text-[9px] text-lime-400/30 uppercase mt-4 tracking-[0.15em]">© 2026 COMBAT CORE MODULE</span>
             </div>
