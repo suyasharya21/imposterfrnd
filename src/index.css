@@ -21,3 +21,48 @@
 .animate-spin-slow {
   animation: spin 3s linear infinite;
 }
+
+@keyframes cyber-pulse {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.35; }
+}
+
+@keyframes glitch-skew {
+  0% { transform: skew(0deg); }
+  20% { transform: skew(-3deg); }
+  40% { transform: skew(4deg); }
+  60% { transform: skew(-1deg); }
+  80% { transform: skew(2deg); }
+  100% { transform: skew(0deg); }
+}
+
+@keyframes neon-glow {
+  0%, 100% { filter: drop-shadow(0 0 10px rgba(163,230,53,0.6)); }
+  50% { filter: drop-shadow(0 0 25px rgba(163,230,53,0.9)); }
+}
+
+.animate-cyber-pulse {
+  animation: cyber-pulse 2s ease-in-out infinite;
+}
+
+.animate-glitch {
+  animation: glitch-skew 1s steps(2) infinite;
+}
+
+.animate-neon-glow {
+  animation: neon-glow 1.5s ease-in-out infinite;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(163, 230, 53, 0.3);
+  border-radius: 2px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(163, 230, 53, 0.6);
+}

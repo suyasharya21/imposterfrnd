@@ -138,8 +138,9 @@ function HUD() {
           </div>
         )}
         <button
-          onClick={leaveGame}
-          className="px-2 py-1 md:px-4 md:py-2 bg-red-500/20 border border-red-500 text-red-500 text-xs md:text-sm font-bold rounded hover:bg-red-500 hover:text-black transition-all duration-200 pointer-events-auto"
+          onClick={() => { sounds.playLeave(); leaveGame(); }}
+          onMouseEnter={() => sounds.playHover()}
+          className="px-2 py-1 md:px-4 md:py-2 bg-red-500/20 border border-red-500 text-red-500 text-xs md:text-sm font-bold rounded hover:bg-red-500 hover:text-black transition-all duration-200 pointer-events-auto cursor-pointer"
         >
           LEAVE
         </button>
@@ -227,6 +228,31 @@ export default function App() {
   const [lockCooldown, setLockCooldown] = useState(false);
   const [menuView, setMenuView] = useState<'main' | 'join'>('main');
   const [joinInput, setJoinInput] = useState('');
+  const [introStep, setIntroStep] = useState<'engage' | 'studio' | 'title' | 'done'>('engage');
+
+  useEffect(() => {
+    if (introStep === 'studio') {
+      const t = setTimeout(() => {
+        setIntroStep('title');
+      }, 2500);
+      return () => clearTimeout(t);
+    }
+    if (introStep === 'title') {
+      const t = setTimeout(() => {
+        setIntroStep('done');
+      }, 2000);
+      return () => clearTimeout(t);
+    }
+  }, [introStep]);
+
+  useEffect(() => {
+    if (gameState === 'menu' && introStep === 'done') {
+      sounds.startMenuBGM();
+    } else {
+      sounds.stopMenuBGM();
+    }
+    return () => sounds.stopMenuBGM();
+  }, [gameState, introStep]);
 
   useEffect(() => {
     if (cpuLevelCleared && document.pointerLockElement) {
@@ -281,6 +307,71 @@ export default function App() {
       <div className="absolute inset-0">
         <Game />
       </div>
+
+      {/* Cinematic Intro Overlays */}
+      {introStep !== 'done' && (
+        <div className="absolute inset-0 bg-black z-[300] flex flex-col items-center justify-center p-6 select-none font-mono">
+          {/* Futuristic Scanline Effect */}
+          <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(163,230,53,0.03)_50%,transparent_50%)] bg-[length:100%_4px] z-50 animate-cyber-pulse" />
+          
+          {/* Skip Intro Button */}
+          {introStep !== 'engage' && (
+            <button 
+              onClick={() => { sounds.playClick(); setIntroStep('done'); }}
+              onMouseEnter={() => sounds.playHover()}
+              className="absolute bottom-8 right-8 text-lime-400/40 hover:text-lime-400 border border-lime-400/20 hover:border-lime-400/55 px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-[0.2em] transition-all cursor-pointer"
+            >
+              Skip System Intro
+            </button>
+          )}
+
+          {introStep === 'engage' && (
+            <div className="max-w-md w-full bg-[#030703] border-2 border-lime-400 p-8 rounded-xl shadow-[0_0_50px_rgba(163,230,53,0.25)] flex flex-col items-center text-center gap-6 relative">
+              <div className="absolute -top-3.5 left-6 bg-lime-400 text-black px-2 py-0.5 text-[9px] font-black tracking-widest uppercase">
+                Warning // Protocol
+              </div>
+              <h2 className="text-lime-400 text-lg font-black tracking-[0.15em] uppercase animate-pulse">
+                Neural Link Interface
+              </h2>
+              <div className="text-xs text-lime-400/60 leading-relaxed text-left bg-black/60 p-4 border border-lime-400/10 rounded">
+                <p>&gt; Encrypted tactical link required for deployment.</p>
+                <p>&gt; Audio synthesis systems initialization pending.</p>
+                <p>&gt; Combat authorization: LEVEL 10 clearance.</p>
+              </div>
+              <button
+                onClick={() => {
+                  sounds.resume();
+                  sounds.playIntroBoom();
+                  setIntroStep('studio');
+                }}
+                onMouseEnter={() => sounds.playHover()}
+                className="w-full py-4 bg-lime-400 text-black font-black uppercase text-sm tracking-[0.2em] shadow-[0_0_20px_rgba(163,230,53,0.4)] hover:scale-[1.03] active:scale-95 transition-all cursor-pointer"
+              >
+                Engage Combat Link
+              </button>
+            </div>
+          )}
+
+          {introStep === 'studio' && (
+            <div className="flex flex-col items-center gap-2 animate-in fade-in zoom-in-75 duration-700">
+              <span className="text-[10px] text-lime-400/40 font-black tracking-[0.3em] uppercase">Developed By</span>
+              <h2 className="text-lime-400 text-3xl md:text-5xl font-black tracking-[0.25em] uppercase animate-glitch animate-neon-glow">
+                ANTIGRAVITY SYSTEMS
+              </h2>
+              <span className="text-[9px] text-lime-400/30 uppercase mt-4 tracking-[0.15em]">© 2026 COMBAT CORE MODULE</span>
+            </div>
+          )}
+
+          {introStep === 'title' && (
+            <div className="flex flex-col items-center gap-4 animate-in fade-in duration-500">
+              <span className="text-[9px] text-lime-400/50 font-black tracking-[0.4em] uppercase animate-pulse">Loading Simulation...</span>
+              <h1 className="text-6xl md:text-8xl font-black text-lime-400 tracking-tighter uppercase italic drop-shadow-[0_0_30px_rgba(163,230,53,0.7)] animate-glitch">
+                IMPOSTERFRND
+              </h1>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Task & Voting Overlays */}
       <TaskOverlay />
@@ -390,8 +481,9 @@ export default function App() {
         <div className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center p-6 md:p-12 z-[140] pointer-events-auto backdrop-blur-xl transition-all duration-500">
           {/* Global Back Arrow */}
           <button 
-            onClick={() => useGameStore.getState().leaveGame()}
-            className="absolute top-6 left-6 flex items-center gap-2 text-lime-400/60 hover:text-lime-400 transition-colors group z-[150]"
+            onClick={() => { sounds.playLeave(); useGameStore.getState().leaveGame(); }}
+            onMouseEnter={() => sounds.playHover()}
+            className="absolute top-6 left-6 flex items-center gap-2 text-lime-400/60 hover:text-lime-400 transition-colors group z-[150] cursor-pointer"
           >
             <div className="p-1.5 border border-lime-400/20 rounded-lg group-hover:bg-lime-400/10 transition-all">
               <ArrowLeft size={18} />
@@ -499,7 +591,8 @@ export default function App() {
                         sounds.playCollect();
                       }
                     }}
-                    className="aspect-square bg-lime-400 text-black flex items-center justify-center px-4 rounded-lg hover:bg-white hover:scale-105 transition-all active:scale-95 shadow-[0_0_15px_rgba(163,230,53,0.2)]"
+                    onMouseEnter={() => sounds.playHover()}
+                    className="aspect-square bg-lime-400 text-black flex items-center justify-center px-4 rounded-lg hover:bg-white hover:scale-105 transition-all active:scale-95 shadow-[0_0_15px_rgba(163,230,53,0.2)] cursor-pointer"
                     title="Copy Frequency"
                   >
                     <Copy size={18} strokeWidth={3} />
@@ -520,8 +613,9 @@ export default function App() {
                 <div className="flex flex-col gap-2 z-10">
                   {isHost ? (
                     <button
-                      onClick={() => hostStartGame()}
-                      className="w-full py-2.5 bg-[#39ff14] text-black font-black text-sm uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-[0_0_20px_rgba(57,255,20,0.4)] rounded-lg"
+                      onClick={() => { sounds.playClick(); hostStartGame(); }}
+                      onMouseEnter={() => sounds.playHover()}
+                      className="w-full py-2.5 bg-[#39ff14] text-black font-black text-sm uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-[0_0_20px_rgba(57,255,20,0.4)] rounded-lg cursor-pointer"
                     >
                       Start Game
                     </button>
@@ -591,41 +685,51 @@ export default function App() {
             {menuView === 'main' ? (
               <>
                 <button
+                  onMouseEnter={() => sounds.playHover()}
                   onMouseDown={() => {
+                    sounds.playClick();
                     startGame('online');
                     safeRequestPointerLock(document.querySelector('canvas'));
                   }}
-                  className="flex flex-col items-center justify-center p-6 bg-lime-500/10 border-2 border-lime-400 text-lime-400 rounded hover:bg-lime-400 hover:text-black transition-all group shadow-[0_0_20px_rgba(163,230,53,0.2)]"
+                  className="flex flex-col items-center justify-center p-6 bg-lime-500/10 border-2 border-lime-400 text-lime-400 rounded hover:bg-lime-400 hover:text-black transition-all group shadow-[0_0_20px_rgba(163,230,53,0.2)] cursor-pointer"
                 >
                   <span className="text-2xl font-black uppercase tracking-tighter">Play Online</span>
                   <span className="text-[10px] opacity-60 uppercase font-black mt-1 group-hover:text-black/60">Matchmaking (8P)</span>
                 </button>
 
                 <button
+                  onMouseEnter={() => sounds.playHover()}
                   onMouseDown={() => {
+                    sounds.playClick();
                     startGame('cpu');
                     safeRequestPointerLock(document.querySelector('canvas'));
                   }}
-                  className="flex flex-col items-center justify-center p-6 bg-blue-500/10 border-2 border-blue-400 text-blue-400 rounded hover:bg-blue-400 hover:text-black transition-all group"
+                  className="flex flex-col items-center justify-center p-6 bg-blue-500/10 border-2 border-blue-400 text-blue-400 rounded hover:bg-blue-400 hover:text-black transition-all group cursor-pointer"
                 >
                   <span className="text-2xl font-black uppercase tracking-tighter">Play with CPU</span>
                   <span className="text-[10px] opacity-60 uppercase font-black mt-1 group-hover:text-black/60">Solo Practice</span>
                 </button>
 
                 <button
+                  onMouseEnter={() => sounds.playHover()}
                   onMouseDown={() => {
+                    sounds.playClick();
                     startGame('room');
                     safeRequestPointerLock(document.querySelector('canvas'));
                   }}
-                  className="flex flex-col items-center justify-center p-6 bg-fuchsia-500/10 border-2 border-fuchsia-400 text-fuchsia-400 rounded hover:bg-fuchsia-400 hover:text-black transition-all group"
+                  className="flex flex-col items-center justify-center p-6 bg-fuchsia-500/10 border-2 border-fuchsia-400 text-fuchsia-400 rounded hover:bg-fuchsia-400 hover:text-black transition-all group cursor-pointer"
                 >
                   <span className="text-2xl font-black uppercase tracking-tighter">Create Room</span>
                   <span className="text-[10px] opacity-60 uppercase font-black mt-1 group-hover:text-black/60">Private Lobby</span>
                 </button>
 
                 <button
-                  onMouseDown={() => setMenuView('join')}
-                  className="flex flex-col items-center justify-center p-6 bg-yellow-500/10 border-2 border-yellow-400 text-yellow-400 rounded hover:bg-yellow-400 hover:text-black transition-all group"
+                  onMouseEnter={() => sounds.playHover()}
+                  onMouseDown={() => {
+                    sounds.playClick();
+                    setMenuView('join');
+                  }}
+                  className="flex flex-col items-center justify-center p-6 bg-yellow-500/10 border-2 border-yellow-400 text-yellow-400 rounded hover:bg-yellow-400 hover:text-black transition-all group cursor-pointer"
                 >
                   <span className="text-2xl font-black uppercase tracking-tighter">Join Code</span>
                   <span className="text-[10px] opacity-60 uppercase font-black mt-1 group-hover:text-black/60">Enter room ID</span>
@@ -635,8 +739,8 @@ export default function App() {
               <div className="col-span-full bg-black/60 border-2 border-yellow-400/30 p-8 rounded-xl flex flex-col items-center gap-6 animate-in fade-in slide-in-from-bottom-4 duration-300 relative">
                 {/* Back Arrow for Join Scene */}
                 <button 
-                  onClick={() => setMenuView('main')}
-                  className="absolute top-4 left-4 p-2 text-yellow-400/50 hover:text-yellow-400 hover:bg-yellow-400/10 rounded-lg transition-all"
+                  onClick={() => { sounds.playClick(); setMenuView('main'); }}
+                  className="absolute top-4 left-4 p-2 text-yellow-400/50 hover:text-yellow-400 hover:bg-yellow-400/10 rounded-lg transition-all cursor-pointer"
                 >
                   <ArrowLeft size={20} />
                 </button>
@@ -655,13 +759,15 @@ export default function App() {
                   <button
                     onClick={() => {
                       if (joinInput.length === 6) {
+                        sounds.playClick();
                         setMenuView('main');
                         startGame('room', joinInput);
                         safeRequestPointerLock(document.querySelector('canvas'));
                       }
                     }}
+                    onMouseEnter={() => sounds.playHover()}
                     disabled={joinInput.length !== 6}
-                    className="w-full px-8 py-3 bg-yellow-400 text-black font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all disabled:opacity-30 disabled:grayscale"
+                    className="w-full px-8 py-3 bg-yellow-400 text-black font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all disabled:opacity-30 disabled:grayscale cursor-pointer"
                   >
                     ENGAGE LINK
                   </button>
@@ -692,10 +798,12 @@ export default function App() {
           </div>
           <button
             onMouseDown={() => {
+              sounds.playClick();
               useGameStore.getState().leaveGame();
               setMenuView('main');
             }}
-            className="px-12 py-5 bg-lime-500/10 border-2 border-lime-400 text-lime-400 text-2xl font-black rounded hover:bg-lime-400 hover:text-black transition-all duration-300 shadow-[0_0_30px_rgba(163,230,53,0.3)] uppercase tracking-widest"
+            onMouseEnter={() => sounds.playHover()}
+            className="px-12 py-5 bg-lime-500/10 border-2 border-lime-400 text-lime-400 text-2xl font-black rounded hover:bg-lime-400 hover:text-black transition-all duration-300 shadow-[0_0_30px_rgba(163,230,53,0.3)] uppercase tracking-widest cursor-pointer"
           >
             System Reboot
           </button>
