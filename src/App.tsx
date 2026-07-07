@@ -229,6 +229,7 @@ export default function App() {
   const [menuView, setMenuView] = useState<'main' | 'join'>('main');
   const [joinInput, setJoinInput] = useState('');
   const [introStep, setIntroStep] = useState<'engage' | 'studio' | 'title' | 'done'>('engage');
+  const [loadingProgress, setLoadingProgress] = useState(0);
 
   useEffect(() => {
     if (introStep === 'studio') {
@@ -238,10 +239,18 @@ export default function App() {
       return () => clearTimeout(t);
     }
     if (introStep === 'title') {
-      const t = setTimeout(() => {
-        setIntroStep('done');
-      }, 2000);
-      return () => clearTimeout(t);
+      setLoadingProgress(0);
+      const interval = setInterval(() => {
+        setLoadingProgress(prev => {
+          if (prev >= 100) {
+            clearInterval(interval);
+            setIntroStep('done');
+            return 100;
+          }
+          return prev + 1;
+        });
+      }, 30); // 30ms * 100 = 3000ms (3 seconds)
+      return () => clearInterval(interval);
     }
   }, [introStep]);
 
@@ -313,17 +322,6 @@ export default function App() {
         <div className="absolute inset-0 bg-black z-[300] flex flex-col items-center justify-center p-6 select-none font-mono">
           {/* Futuristic Scanline Effect */}
           <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(163,230,53,0.03)_50%,transparent_50%)] bg-[length:100%_4px] z-50 animate-cyber-pulse" />
-          
-          {/* Skip Intro Button */}
-          {introStep !== 'engage' && (
-            <button 
-              onClick={() => { sounds.playClick(); setIntroStep('done'); }}
-              onMouseEnter={() => sounds.playHover()}
-              className="absolute bottom-8 right-8 text-lime-400/40 hover:text-lime-400 border border-lime-400/20 hover:border-lime-400/55 px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-[0.2em] transition-all cursor-pointer"
-            >
-              Skip System Intro
-            </button>
-          )}
 
           {introStep === 'engage' && (
             <div className="max-w-md w-full bg-[#030703] border-2 border-lime-400 p-8 rounded-xl shadow-[0_0_50px_rgba(163,230,53,0.25)] flex flex-col items-center text-center gap-6 relative">
@@ -363,11 +361,25 @@ export default function App() {
           )}
 
           {introStep === 'title' && (
-            <div className="flex flex-col items-center gap-4 animate-in fade-in duration-500">
-              <span className="text-[9px] text-lime-400/50 font-black tracking-[0.4em] uppercase animate-pulse">Loading Simulation...</span>
+            <div className="flex flex-col items-center gap-6 animate-in fade-in duration-500">
+              <span className="text-[9px] text-lime-400/50 font-black tracking-[0.4em] uppercase animate-pulse">Initializing Interface...</span>
               <h1 className="text-6xl md:text-8xl font-black text-lime-400 tracking-tighter uppercase italic drop-shadow-[0_0_30px_rgba(163,230,53,0.7)] animate-glitch">
                 IMPOSTERFRND
               </h1>
+              
+              {/* Loading Bar */}
+              <div className="flex flex-col items-center gap-2 mt-4">
+                <div className="w-64 md:w-80 h-2 bg-lime-950/20 border border-lime-400/25 rounded-full overflow-hidden relative">
+                  <div 
+                    className="h-full bg-lime-400 shadow-[0_0_12px_rgba(163,230,53,0.8)] transition-all duration-75"
+                    style={{ width: `${loadingProgress}%` }}
+                  />
+                </div>
+                <div className="flex justify-between w-64 md:w-80 text-[10px] text-lime-400/60 font-black uppercase tracking-widest">
+                  <span>Syncing...</span>
+                  <span className="tabular-nums">{loadingProgress}%</span>
+                </div>
+              </div>
             </div>
           )}
         </div>
