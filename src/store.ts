@@ -105,6 +105,9 @@ interface GameStore {
   forcedPosition: [number, number, number] | null;
 
   timerInterval: NodeJS.Timeout | null;
+  hostId: string | null;
+  lobbyCountdown: number | null;
+  hostStartGame: () => void;
   startGame: (mode: 'online' | 'cpu' | 'room', code?: string) => void;
   createRoom: () => void;
   joinRoom: (code: string) => void;
@@ -215,6 +218,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   socket: null,
   roomCode: null,
   gameMode: null,
+  hostId: null,
+  lobbyCountdown: null,
   cpuLevel: 1,
   cpuLevelCleared: false,
   otherPlayers: {},
@@ -329,7 +334,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       get().leaveGame();
     });
 
-    newSocket.on('gameJoined', ({ players, arenaSeed, roomCode, status }: { players: Record<string, PlayerData>, arenaSeed: number, roomCode: string, status: 'waiting' | 'playing' }) => {
+    newSocket.on('gameJoined', ({ players, arenaSeed, roomCode, status, hostId, countdown }: { players: Record<string, PlayerData>, arenaSeed: number, roomCode: string, status: 'waiting' | 'playing', hostId?: string, countdown?: number | null }) => {
       const otherPlayers = { ...players };
       delete otherPlayers[newSocket!.id!];
       
@@ -362,6 +367,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         gameState: status === 'waiting' ? 'waiting' : 'playing',
         timeLeft: 1200,
         score: 0,
+        hostId: hostId || null,
+        lobbyCountdown: countdown !== undefined ? countdown : null,
         arenaSeed,
         enemies,
         lives: 3,
@@ -386,7 +393,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
     });
 
-    newSocket.on('roomUpdate', ({ players, status }: { players: Record<string, PlayerData>, status: 'waiting' | 'playing' }) => {
+    newSocket.on('roomUpdate', ({ players, status, hostId, countdown }: { players: Record<string, PlayerData>, status: 'waiting' | 'playing', hostId?: string, countdown?: number | null }) => {
       const otherPlayers = { ...players };
       delete otherPlayers[newSocket!.id!];
 
@@ -398,7 +405,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
         });
       }
 
-      set({ otherPlayers });
+      set({ 
+        otherPlayers,
+        hostId: hostId !== undefined ? hostId : get().hostId,
+        lobbyCountdown: countdown !== undefined ? countdown : get().lobbyCountdown
+      });
+    });
+
+    newSocket.on('countdownUpdate', ({ countdown }: { countdown: number | null }) => {
+      set({ lobbyCountdown: countdown });
     });
 
     newSocket.on('gameStart', ({ roles, tasks }: { roles: Record<string, 'crewmate' | 'imposter'>, tasks: Array<{ id: string, x: number, z: number }> }) => {
@@ -424,6 +439,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         chatHistory: [],
         isDoingTask: false,
         currentTaskId: null,
+        lobbyCountdown: null,
         timerInterval: setInterval(() => {
           if (get().gameMode === 'cpu') {
             get().updateTime(1);
@@ -608,6 +624,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   createRoom: () => get().startGame('room'),
   joinRoom: (code) => get().startGame('room', code),
+  hostStartGame: () => {
+    const { socket } = get();
+    if (socket) {
+      socket.emit('hostStartGame');
+    }
+  },
 
   endGame: () => {
     const { socket, timerInterval } = get();
@@ -634,6 +656,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       timerInterval: null,
       isConnecting: false,
       otherPlayers: {},
+      hostId: null,
+      lobbyCountdown: null,
       enemies: [],
       lasers: [],
       particles: [],

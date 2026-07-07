@@ -211,8 +211,13 @@ export default function App() {
   const cpuLevel = useGameStore(state => state.cpuLevel);
   const enemies = useGameStore(state => state.enemies);
   const cpuLevelCleared = useGameStore(state => state.cpuLevelCleared);
+  const hostId = useGameStore(state => state.hostId);
+  const lobbyCountdown = useGameStore(state => state.lobbyCountdown);
+  const hostStartGame = useGameStore(state => state.hostStartGame);
+  const socket = useGameStore(state => state.socket);
   
   const currentPlayerCount = Object.keys(otherPlayers).length + 1;
+  const isHost = socket && hostId === socket.id;
 
   const isMobile = useIsMobile();
   const lastUnlockTime = useRef(0);
@@ -436,6 +441,14 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Lobby Countdown display */}
+              {lobbyCountdown !== null && (
+                <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-lg flex items-center justify-between z-10 animate-pulse">
+                  <span className="text-amber-400 text-xs font-black uppercase tracking-wider">Engagement auto-starting in:</span>
+                  <span className="text-amber-400 text-xl font-black">{lobbyCountdown}s</span>
+                </div>
+              )}
+
               {/* Player List */}
               <div className="bg-black/50 border border-lime-400/10 rounded-xl p-4 flex flex-col gap-3 relative z-10 max-h-[200px] overflow-y-auto custom-scrollbar">
                 <div className="text-[10px] text-lime-400/40 font-black uppercase tracking-widest mb-1 border-b border-lime-400/5 pb-2 flex justify-between">
@@ -446,7 +459,7 @@ export default function App() {
                 <div className="flex items-center justify-between group">
                   <div className="flex items-center gap-3">
                     <div className="w-2 h-2 rounded-full bg-lime-400 shadow-[0_0_8px_rgba(163,230,53,0.8)]" />
-                    <span className="text-white font-black text-sm uppercase">You (Pilot 0)</span>
+                    <span className="text-white font-black text-sm uppercase">You (Pilot 0) {isHost && <span className="text-amber-400 font-black text-[10px] ml-1">[HOST]</span>}</span>
                   </div>
                   <span className="text-lime-400/80 text-[10px] font-black uppercase px-2 py-0.5 bg-lime-400/10 border border-lime-400/20 rounded">Ready</span>
                 </div>
@@ -455,7 +468,7 @@ export default function App() {
                   <div key={player.id} className="flex items-center justify-between animate-in fade-in slide-in-from-left-4 duration-300">
                     <div className="flex items-center gap-3">
                       <div className="w-2 h-2 rounded-full bg-[#39ff14]" />
-                      <span className="text-white/80 font-black text-sm uppercase">{player.name || `Pilot ${idx + 1}`}</span>
+                      <span className="text-white/80 font-black text-sm uppercase">{player.name || `Pilot ${idx + 1}`} {hostId === player.id && <span className="text-amber-500 font-black text-[10px] ml-1">[HOST]</span>}</span>
                     </div>
                     <span className="text-lime-400/80 text-[10px] font-black uppercase px-2 py-0.5 bg-lime-400/10 border border-lime-400/20 rounded">Synced</span>
                   </div>
@@ -498,6 +511,24 @@ export default function App() {
                   style={{ width: `${Math.min(100, (currentPlayerCount / 8) * 100)}%` }}
                 />
               </div>
+
+              {/* Launch Engagement Controls */}
+              {currentPlayerCount >= 5 && (
+                <div className="flex flex-col gap-2 z-10 mt-2">
+                  {isHost ? (
+                    <button
+                      onClick={() => hostStartGame()}
+                      className="w-full py-4 bg-[#39ff14] text-black font-black text-lg uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-[0_0_25px_rgba(57,255,20,0.5)] rounded-xl"
+                    >
+                      Start Game
+                    </button>
+                  ) : (
+                    <div className="w-full py-3 bg-lime-950/20 border border-lime-400/30 text-lime-400/70 font-bold uppercase text-center tracking-widest text-xs rounded-xl animate-pulse">
+                      Awaiting launch permission from host...
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <p className="text-lime-400/40 text-[10px] text-center font-bold uppercase tracking-[0.2em] animate-pulse">

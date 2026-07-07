@@ -46,6 +46,9 @@ async function startServer() {
     phase: 'waiting' | 'playing' | 'voting';
     tasks: Array<{ id: string, x: number, z: number }>;
     physicsWorld?: any;
+    hostId?: string;
+    countdown?: number | null;
+    countdownInterval?: NodeJS.Timeout;
   }
 
   const MAX_ROOM_SIZE = 8;
@@ -192,6 +195,96 @@ async function startServer() {
     }
   };
 
+  function generateServerArena(seed: number) {
+    // Create a gravity-free 3D Rapier world
+    const world = new RAPIER.World({ x: 0.0, y: 0.0, z: 0.0 });
+    const obstacles = getObstacles(false, seed);
+
+    obstacles.forEach((obs, index) => {
+      let rigidBodyDesc = RAPIER.RigidBodyDesc.fixed()
+        .setTranslation(obs.position[0], 0, obs.position[2]);
+      if (obs.rotation[1] !== 0) {
+        // Represent y-axis rotation as a quaternion
+        const halfAngle = obs.rotation[1] / 2;
+        rigidBodyDesc.setRotation({ x: 0, y: Math.sin(halfAngle), z: 0, w: Math.cos(halfAngle) });
+      }
+      
+      let body = world.createRigidBody(rigidBodyDesc);
+      let colliderDesc;
+      if (obs.type === 'box') {
+        colliderDesc = RAPIER.ColliderDesc.cuboid(obs.size[0] / 2, obs.size[1] / 2, obs.size[2] / 2);
+      } else {
+        colliderDesc = RAPIER.ColliderDesc.cylinder(obs.size[1] / 2, obs.size[0] / 2);
+      }
+      // Offset collider by half height locally to sit flush on y=0 floor
+      colliderDesc.setTranslation(0, obs.size[1] / 2, 0);
+      world.createCollider(colliderDesc, body);
+    });
+
+    // Add boundary walls at y=0, offset colliders to y=6 locally
+    // West Wall
+    let wBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(-100, 0, 0));
+    world.createCollider(RAPIER.ColliderDesc.cuboid(0.5, 6, 100).setTranslation(0, 6, 0), wBody);
+    // East Wall
+    let eBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(100, 0, 0));
+    world.createCollider(RAPIER.ColliderDesc.cuboid(0.5, 6, 100).setTranslation(0, 6, 0), eBody);
+    // North Wall
+    let nBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, 0, -100));
+    world.createCollider(RAPIER.ColliderDesc.cuboid(100, 6, 0.5).setTranslation(0, 6, 0), nBody);
+    // South Wall
+    let sBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, 0, 100));
+    world.createCollider(RAPIER.ColliderDesc.cuboid(100, 6, 0.5).setTranslation(0, 6, 0), sBody);
+
+    return world;
+  }
+
+  function startGame(roomId: string) {
+    const room = rooms[roomId];
+    if (!room || room.status !== 'waiting') return;
+
+    if (room.countdownInterval) {
+      clearInterval(room.countdownInterval);
+      delete room.countdownInterval;
+      room.countdown = null;
+    }
+
+    room.status = 'playing';
+    room.phase = 'playing';
+    room.roomTimer = 1200;
+    room.votingTimer = 30;
+
+    const playerIds = Object.keys(room.players);
+    const imposterIdx = Math.floor(Math.random() * playerIds.length);
+    const imposterId = playerIds[imposterIdx];
+
+    const roles: Record<string, 'crewmate' | 'imposter'> = {};
+    playerIds.forEach(id => {
+      const p = room.players[id];
+      p.role = (id === imposterId) ? 'imposter' : 'crewmate';
+      p.isAlive = true;
+      p.currentVote = null;
+      roles[id] = p.role;
+    });
+
+    room.tasks = [];
+    const taskCount = playerIds.length - 1;
+    for (let i = 0; i < taskCount; i++) {
+      const x = Math.floor((Math.random() - 0.5) * 160);
+      const z = Math.floor((Math.random() - 0.5) * 160);
+      room.tasks.push({
+        id: `task_${i}_${Math.random().toString(36).substring(2, 5)}`,
+        x,
+        z
+      });
+    }
+
+    // Initialize server physics world
+    room.physicsWorld = generateServerArena(room.arenaSeed);
+
+    io.to(roomId).emit('gameStart', { roles, tasks: room.tasks });
+    startRoomInterval(roomId);
+  };
+
   io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
@@ -205,7 +298,9 @@ async function startServer() {
           roomTimer: 1200,
           votingTimer: 30,
           phase: 'waiting',
-          tasks: []
+          tasks: [],
+          hostId: socket.id,
+          countdown: null
         };
       }
 
@@ -239,101 +334,55 @@ async function startServer() {
       socket.join(roomId);
 
       const playerCount = Object.keys(rooms[roomId].players).length;
+      const room = rooms[roomId];
+
+      // Set hostId if not set
+      if (!room.hostId) {
+        room.hostId = socket.id;
+      }
 
       socket.emit('gameJoined', { 
-        players: rooms[roomId].players, 
-        arenaSeed: rooms[roomId].arenaSeed,
+        players: room.players, 
+        arenaSeed: room.arenaSeed,
         roomCode: roomId,
-        status: rooms[roomId].status
+        status: room.status,
+        hostId: room.hostId,
+        countdown: room.countdown
       });
       
       io.to(roomId).emit('roomUpdate', {
-        players: rooms[roomId].players,
-        status: rooms[roomId].status,
-        playerCount
+        players: room.players,
+        status: room.status,
+        playerCount,
+        hostId: room.hostId,
+        countdown: room.countdown
       });
 
-      if (rooms[roomId].status === 'waiting' && playerCount >= MIN_PLAYERS_TO_START) {
-        const room = rooms[roomId];
-        room.status = 'playing';
-        room.phase = 'playing';
-        room.roomTimer = 1200;
-        room.votingTimer = 30;
+      // Start 30-second countdown once minimum player count (5) is met
+      if (room.status === 'waiting' && playerCount >= MIN_PLAYERS_TO_START && !room.countdownInterval) {
+        room.countdown = 30;
+        io.to(roomId).emit('countdownUpdate', { countdown: room.countdown });
 
-        const playerIds = Object.keys(room.players);
-        const imposterIdx = Math.floor(Math.random() * playerIds.length);
-        const imposterId = playerIds[imposterIdx];
+        room.countdownInterval = setInterval(() => {
+          if (room.countdown !== null && room.countdown > 0) {
+            room.countdown--;
+            io.to(roomId).emit('countdownUpdate', { countdown: room.countdown });
 
-        const roles: Record<string, 'crewmate' | 'imposter'> = {};
-        playerIds.forEach(id => {
-          const p = room.players[id];
-          p.role = (id === imposterId) ? 'imposter' : 'crewmate';
-          p.isAlive = true;
-          p.currentVote = null;
-          roles[id] = p.role;
-        });
-
-        room.tasks = [];
-        const taskCount = playerIds.length - 1;
-        for (let i = 0; i < taskCount; i++) {
-          const x = Math.floor((Math.random() - 0.5) * 160);
-          const z = Math.floor((Math.random() - 0.5) * 160);
-          room.tasks.push({
-            id: `task_${i}_${Math.random().toString(36).substring(2, 5)}`,
-            x,
-            z
-          });
-        }
-
-        // Initialize server physics world
-        room.physicsWorld = generateServerArena(room.arenaSeed);
-
-        io.to(roomId).emit('gameStart', { roles, tasks: room.tasks });
-        startRoomInterval(roomId);
+            if (room.countdown === 0) {
+              clearInterval(room.countdownInterval!);
+              delete room.countdownInterval;
+              room.countdown = null;
+              startGame(roomId);
+            }
+          } else {
+            if (room.countdownInterval) {
+              clearInterval(room.countdownInterval);
+              delete room.countdownInterval;
+            }
+            room.countdown = null;
+          }
+        }, 1000);
       }
-    };
-
-    const generateServerArena = (seed: number) => {
-      // Create a gravity-free 3D Rapier world
-      const world = new RAPIER.World({ x: 0.0, y: 0.0, z: 0.0 });
-      const obstacles = getObstacles(false, seed);
-
-      obstacles.forEach((obs, index) => {
-        let rigidBodyDesc = RAPIER.RigidBodyDesc.fixed()
-          .setTranslation(obs.position[0], 0, obs.position[2]);
-        if (obs.rotation[1] !== 0) {
-          // Represent y-axis rotation as a quaternion
-          const halfAngle = obs.rotation[1] / 2;
-          rigidBodyDesc.setRotation({ x: 0, y: Math.sin(halfAngle), z: 0, w: Math.cos(halfAngle) });
-        }
-        
-        let body = world.createRigidBody(rigidBodyDesc);
-        let colliderDesc;
-        if (obs.type === 'box') {
-          colliderDesc = RAPIER.ColliderDesc.cuboid(obs.size[0] / 2, obs.size[1] / 2, obs.size[2] / 2);
-        } else {
-          colliderDesc = RAPIER.ColliderDesc.cylinder(obs.size[1] / 2, obs.size[0] / 2);
-        }
-        // Offset collider by half height locally to sit flush on y=0 floor
-        colliderDesc.setTranslation(0, obs.size[1] / 2, 0);
-        world.createCollider(colliderDesc, body);
-      });
-
-      // Add boundary walls at y=0, offset colliders to y=6 locally
-      // West Wall
-      let wBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(-100, 0, 0));
-      world.createCollider(RAPIER.ColliderDesc.cuboid(0.5, 6, 100).setTranslation(0, 6, 0), wBody);
-      // East Wall
-      let eBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(100, 0, 0));
-      world.createCollider(RAPIER.ColliderDesc.cuboid(0.5, 6, 100).setTranslation(0, 6, 0), eBody);
-      // North Wall
-      let nBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, 0, -100));
-      world.createCollider(RAPIER.ColliderDesc.cuboid(100, 6, 0.5).setTranslation(0, 6, 0), nBody);
-      // South Wall
-      let sBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, 0, 100));
-      world.createCollider(RAPIER.ColliderDesc.cuboid(100, 6, 0.5).setTranslation(0, 6, 0), sBody);
-
-      return world;
     };
 
     socket.on('createRoom', () => {
@@ -535,6 +584,17 @@ async function startServer() {
       }
     });
 
+    socket.on('hostStartGame', () => {
+      const roomId = socketToRoom[socket.id];
+      if (roomId && rooms[roomId]) {
+        const room = rooms[roomId];
+        const playerCount = Object.keys(room.players).length;
+        if (room.hostId === socket.id && playerCount >= MIN_PLAYERS_TO_START && room.status === 'waiting') {
+          startGame(roomId);
+        }
+      }
+    });
+
     socket.on('sendChatMessage', (message: string) => {
       const roomId = socketToRoom[socket.id];
       if (roomId && rooms[roomId]) {
@@ -565,19 +625,42 @@ async function startServer() {
     socket.on('disconnect', () => {
       const roomId = socketToRoom[socket.id];
       if (roomId && rooms[roomId]) {
-        delete rooms[roomId].players[socket.id];
+        const room = rooms[roomId];
+        
+        // Reassign host if host leaves
+        if (room.hostId === socket.id) {
+          const remainingIds = Object.keys(room.players).filter(id => id !== socket.id);
+          room.hostId = remainingIds[0] || '';
+        }
+
+        delete room.players[socket.id];
         delete socketToRoom[socket.id];
         io.to(roomId).emit('playerLeft', socket.id);
 
-        if (rooms[roomId] && rooms[roomId].status === 'waiting') {
+        const playerCount = Object.keys(room.players).length;
+
+        // Cancel countdown if player count falls below minimum to start (5)
+        if (playerCount < MIN_PLAYERS_TO_START && room.countdownInterval) {
+          clearInterval(room.countdownInterval);
+          delete room.countdownInterval;
+          room.countdown = null;
+          io.to(roomId).emit('countdownUpdate', { countdown: null });
+        }
+
+        if (room.status === 'waiting') {
           io.to(roomId).emit('roomUpdate', {
-            players: rooms[roomId].players,
-            status: rooms[roomId].status,
-            playerCount: Object.keys(rooms[roomId].players).length
+            players: room.players,
+            status: room.status,
+            playerCount,
+            hostId: room.hostId,
+            countdown: room.countdown
           });
         }
 
-        if (Object.keys(rooms[roomId].players).length === 0) {
+        if (playerCount === 0) {
+          if (room.countdownInterval) {
+            clearInterval(room.countdownInterval);
+          }
           if (roomIntervals[roomId]) {
             clearInterval(roomIntervals[roomId]);
             delete roomIntervals[roomId];
