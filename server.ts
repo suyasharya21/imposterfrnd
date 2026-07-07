@@ -6,18 +6,62 @@ import path from 'path';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { getObstacles } from './src/constants';
 
+// --- Utility Functions for Server-Side Generation ---
+function mulberry32(a: number) {
+  return function() {
+    let t = a += 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+}
+
+function checkOverlap(x: number, z: number, obstacles: any[]) {
+  const buffer = 2.0; 
+  for (const obs of obstacles) {
+    if (obs.type === 'cylinder') {
+      const radius = obs.size[0] / 2;
+      const dx = x - obs.position[0];
+      const dz = z - obs.position[2];
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist < radius + buffer) return true;
+    } else {
+      const ox = obs.position[0];
+      const oz = obs.position[2];
+      const halfW = obs.size[0] / 2;
+      const halfD = obs.size[2] / 2;
+      const rot = obs.rotation[1];
+      
+      const dx = x - ox;
+      const dz = z - oz;
+      const cos = Math.cos(-rot);
+      const sin = Math.sin(-rot);
+      const localX = dx * cos - dz * sin;
+      const localZ = dx * sin + dz * cos;
+      
+      if (Math.abs(localX) < halfW + buffer && Math.abs(localZ) < halfD + buffer) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+const WEAPON_DAMAGE = {
+  gun: 2,
+  pistol: 1,
+  knife: 1
+};
+
 async function startServer() {
   await RAPIER.init();
   const app = express();
   const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
   const httpServer = createServer(app);
   const io = new Server(httpServer, {
-    cors: {
-      origin: '*',
-    },
+    cors: { origin: '*' },
   });
 
-  // Global Game State types
   interface Player {
     id: string;
     name: string;
@@ -34,11 +78,29 @@ async function startServer() {
     lastValidPosition: [number, number, number];
     lastShootTime: number;
     health: number;
+    currentWeapon: 'gun' | 'pistol' | 'knife'; // Server tracks weapon
+  }
+
+  interface Bot {
+    id: string;
+    position: [number, number, number];
+    health: number;
+    state: 'active' | 'disabled';
+    score: number;
+    disabledUntil: number;
+  }
+
+  interface Coin {
+    id: string;
+    position: [number, number, number];
+    collected: boolean;
   }
 
   interface Room {
     id: string;
     players: Record<string, Player>;
+    bots: Record<string, Bot>;
+    coins: Record<string, Coin>;
     arenaSeed: number;
     status: 'waiting' | 'playing';
     roomTimer: number;
@@ -102,7 +164,6 @@ async function startServer() {
         }
       }
 
-      // Check win conditions: if all crewmates are dead, imposter wins
       const aliveCrewmates = Object.values(room.players).filter(p => p.role === 'crewmate' && p.isAlive);
       const aliveImposters = Object.values(room.players).filter(p => p.role === 'imposter' && p.isAlive);
 
@@ -129,31 +190,16 @@ async function startServer() {
     if (!room) return;
 
     const voteCounts: Record<string, number> = {};
+    Object.values(room.players).forEach(p => { if (p.isAlive) voteCounts[p.id] = 0; });
     Object.values(room.players).forEach(p => {
-      if (p.isAlive) {
-        voteCounts[p.id] = 0;
-      }
-    });
-
-    Object.values(room.players).forEach(p => {
-      if (p.currentVote && voteCounts[p.currentVote] !== undefined) {
-        voteCounts[p.currentVote]++;
-      }
+      if (p.currentVote && voteCounts[p.currentVote] !== undefined) voteCounts[p.currentVote]++;
     });
 
     let maxVotes = -1;
-    Object.values(voteCounts).forEach(count => {
-      if (count > maxVotes) {
-        maxVotes = count;
-      }
-    });
+    Object.values(voteCounts).forEach(count => { if (count > maxVotes) maxVotes = count; });
 
     const tiedPlayers: string[] = [];
-    Object.keys(voteCounts).forEach(id => {
-      if (voteCounts[id] === maxVotes) {
-        tiedPlayers.push(id);
-      }
-    });
+    Object.keys(voteCounts).forEach(id => { if (voteCounts[id] === maxVotes) tiedPlayers.push(id); });
 
     if (tiedPlayers.length > 0) {
       const selectedId = tiedPlayers[Math.floor(Math.random() * tiedPlayers.length)];
@@ -171,11 +217,7 @@ async function startServer() {
         selectedPlayer.isAlive = false;
         selectedPlayer.state = 'disabled';
 
-        io.to(roomId).emit('roomUpdate', {
-          players: room.players,
-          status: room.status,
-          playerCount: Object.keys(room.players).length
-        });
+        io.to(roomId).emit('roomUpdate', { players: room.players, status: room.status, playerCount: Object.keys(room.players).length });
 
         const aliveCrewmates = Object.values(room.players).filter(p => p.role === 'crewmate' && p.isAlive);
         if (aliveCrewmates.length === 0) {
@@ -196,42 +238,30 @@ async function startServer() {
   };
 
   function generateServerArena(seed: number) {
-    // Create a gravity-free 3D Rapier world
     const world = new RAPIER.World({ x: 0.0, y: 0.0, z: 0.0 });
     const obstacles = getObstacles(false, seed);
 
-    obstacles.forEach((obs, index) => {
-      let rigidBodyDesc = RAPIER.RigidBodyDesc.fixed()
-        .setTranslation(obs.position[0], 0, obs.position[2]);
+    obstacles.forEach((obs) => {
+      let rigidBodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(obs.position[0], 0, obs.position[2]);
       if (obs.rotation[1] !== 0) {
-        // Represent y-axis rotation as a quaternion
         const halfAngle = obs.rotation[1] / 2;
         rigidBodyDesc.setRotation({ x: 0, y: Math.sin(halfAngle), z: 0, w: Math.cos(halfAngle) });
       }
-      
       let body = world.createRigidBody(rigidBodyDesc);
-      let colliderDesc;
-      if (obs.type === 'box') {
-        colliderDesc = RAPIER.ColliderDesc.cuboid(obs.size[0] / 2, obs.size[1] / 2, obs.size[2] / 2);
-      } else {
-        colliderDesc = RAPIER.ColliderDesc.cylinder(obs.size[1] / 2, obs.size[0] / 2);
-      }
-      // Offset collider by half height locally to sit flush on y=0 floor
+      let colliderDesc = obs.type === 'box' 
+        ? RAPIER.ColliderDesc.cuboid(obs.size[0] / 2, obs.size[1] / 2, obs.size[2] / 2)
+        : RAPIER.ColliderDesc.cylinder(obs.size[1] / 2, obs.size[0] / 2);
+      
       colliderDesc.setTranslation(0, obs.size[1] / 2, 0);
       world.createCollider(colliderDesc, body);
     });
 
-    // Add boundary walls at y=0, offset colliders to y=6 locally
-    // West Wall
     let wBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(-100, 0, 0));
     world.createCollider(RAPIER.ColliderDesc.cuboid(0.5, 6, 100).setTranslation(0, 6, 0), wBody);
-    // East Wall
     let eBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(100, 0, 0));
     world.createCollider(RAPIER.ColliderDesc.cuboid(0.5, 6, 100).setTranslation(0, 6, 0), eBody);
-    // North Wall
     let nBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, 0, -100));
     world.createCollider(RAPIER.ColliderDesc.cuboid(100, 6, 0.5).setTranslation(0, 6, 0), nBody);
-    // South Wall
     let sBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, 0, 100));
     world.createCollider(RAPIER.ColliderDesc.cuboid(100, 6, 0.5).setTranslation(0, 6, 0), sBody);
 
@@ -252,10 +282,10 @@ async function startServer() {
     room.phase = 'playing';
     room.roomTimer = 1200;
     room.votingTimer = 30;
+    room.physicsWorld = generateServerArena(room.arenaSeed);
 
     const playerIds = Object.keys(room.players);
-    const imposterIdx = Math.floor(Math.random() * playerIds.length);
-    const imposterId = playerIds[imposterIdx];
+    const imposterId = playerIds[Math.floor(Math.random() * playerIds.length)];
 
     const roles: Record<string, 'crewmate' | 'imposter'> = {};
     playerIds.forEach(id => {
@@ -267,191 +297,112 @@ async function startServer() {
     });
 
     room.tasks = [];
-    const taskCount = playerIds.length - 1;
-    for (let i = 0; i < taskCount; i++) {
-      const x = Math.floor((Math.random() - 0.5) * 160);
-      const z = Math.floor((Math.random() - 0.5) * 160);
+    for (let i = 0; i < playerIds.length - 1; i++) {
       room.tasks.push({
         id: `task_${i}_${Math.random().toString(36).substring(2, 5)}`,
-        x,
-        z
+        x: Math.floor((Math.random() - 0.5) * 160),
+        z: Math.floor((Math.random() - 0.5) * 160)
       });
     }
 
-    // Initialize server physics world
-    room.physicsWorld = generateServerArena(room.arenaSeed);
+    // 10/10 SERVER-SIDE BOT SPAWNING
+    room.bots = {};
+    const rng = mulberry32(room.arenaSeed + 1);
+    const obstacles = getObstacles(false, room.arenaSeed);
+    for (let i = 0; i < 8; i++) {
+      let x, z;
+      do {
+        x = (rng() - 0.5) * 160;
+        z = (rng() - 0.5) * 160;
+      } while ((Math.abs(x) < 20 && Math.abs(z) < 20) || checkOverlap(x, z, obstacles));
+      
+      const botId = `bot-${i + 1}`;
+      room.bots[botId] = { id: botId, position: [x, 1, z], health: 2, state: 'active', score: 0, disabledUntil: 0 };
+    }
+    room.coins = {};
 
-    io.to(roomId).emit('gameStart', { roles, tasks: room.tasks });
+    io.to(roomId).emit('gameStart', { roles, tasks: room.tasks, bots: Object.values(room.bots) });
     startRoomInterval(roomId);
   };
 
   io.on('connection', (socket) => {
-    console.log('User connected:', socket.id);
-
     const joinRoom = (roomId: string, playerName: string) => {
       if (!rooms[roomId]) {
         rooms[roomId] = {
-          id: roomId,
-          players: {},
-          arenaSeed: Math.floor(Math.random() * 1000000),
-          status: 'waiting',
-          roomTimer: 1200,
-          votingTimer: 30,
-          phase: 'waiting',
-          tasks: [],
-          hostId: socket.id,
-          countdown: null
+          id: roomId, players: {}, bots: {}, coins: {}, arenaSeed: Math.floor(Math.random() * 1000000),
+          status: 'waiting', roomTimer: 1200, votingTimer: 30, phase: 'waiting', tasks: [],
+          hostId: socket.id, countdown: null
         };
       }
 
       if (Object.keys(rooms[roomId].players).length >= MAX_ROOM_SIZE) {
-        socket.emit('gameError', 'Room is full');
-        return;
+        socket.emit('gameError', 'Room is full'); return;
       }
 
       const colors = ['#ff0055', '#32cd32', '#ffff00', '#ff00ff', '#39ff14', '#00ffff', '#ffa500', '#ffffff'];
-      const color = colors[Object.keys(rooms[roomId].players).length % colors.length];
+      const room = rooms[roomId];
 
-      rooms[roomId].players[socket.id] = {
-        id: socket.id,
-        name: playerName,
-        position: [0, 2, 0],
-        rotation: 0,
-        state: 'active',
-        disabledUntil: 0,
-        score: 0,
-        color,
-        role: 'crewmate',
-        isAlive: true,
-        currentVote: null,
-        lastUpdateTime: Date.now(),
-        lastValidPosition: [0, 2, 0],
-        lastShootTime: 0,
-        health: 2
+      room.players[socket.id] = {
+        id: socket.id, name: playerName, position: [0, 2, 0], rotation: 0, state: 'active', disabledUntil: 0,
+        score: 0, color: colors[Object.keys(room.players).length % colors.length], role: 'crewmate',
+        isAlive: true, currentVote: null, lastUpdateTime: Date.now(), lastValidPosition: [0, 2, 0],
+        lastShootTime: 0, health: 2, currentWeapon: 'gun'
       };
 
       socketToRoom[socket.id] = roomId;
       socket.join(roomId);
 
-      const playerCount = Object.keys(rooms[roomId].players).length;
-      const room = rooms[roomId];
-
-      // Set hostId if not set
-      if (!room.hostId) {
-        room.hostId = socket.id;
-      }
+      if (!room.hostId) room.hostId = socket.id;
 
       socket.emit('gameJoined', { 
-        players: room.players, 
-        arenaSeed: room.arenaSeed,
-        roomCode: roomId,
-        status: room.status,
-        hostId: room.hostId,
-        countdown: room.countdown
+        players: room.players, arenaSeed: room.arenaSeed, roomCode: roomId, status: room.status, 
+        hostId: room.hostId, countdown: room.countdown,
+        bots: Object.values(room.bots), coins: Object.values(room.coins) 
       });
       
-      io.to(roomId).emit('roomUpdate', {
-        players: room.players,
-        status: room.status,
-        playerCount,
-        hostId: room.hostId,
-        countdown: room.countdown
-      });
+      io.to(roomId).emit('roomUpdate', { players: room.players, status: room.status, playerCount: Object.keys(room.players).length, hostId: room.hostId, countdown: room.countdown });
 
-      // Start 30-second countdown once minimum player count (5) is met
-      if (room.status === 'waiting' && playerCount >= MIN_PLAYERS_TO_START && !room.countdownInterval) {
+      if (room.status === 'waiting' && Object.keys(room.players).length >= MIN_PLAYERS_TO_START && !room.countdownInterval) {
         room.countdown = 30;
         io.to(roomId).emit('countdownUpdate', { countdown: room.countdown });
-
         room.countdownInterval = setInterval(() => {
           if (room.countdown !== null && room.countdown > 0) {
             room.countdown--;
             io.to(roomId).emit('countdownUpdate', { countdown: room.countdown });
-
             if (room.countdown === 0) {
-              clearInterval(room.countdownInterval!);
-              delete room.countdownInterval;
-              room.countdown = null;
+              clearInterval(room.countdownInterval!); delete room.countdownInterval; room.countdown = null;
               startGame(roomId);
             }
-          } else {
-            if (room.countdownInterval) {
-              clearInterval(room.countdownInterval);
-              delete room.countdownInterval;
-            }
-            room.countdown = null;
           }
         }, 1000);
       }
     };
 
-    socket.on('createRoom', (data?: { playerName?: string }) => {
-      const roomId = generateRoomId();
-      const name = data?.playerName || `Player ${Math.floor(Math.random() * 1000)}`;
-      joinRoom(roomId, name);
+    socket.on('createRoom', (data) => joinRoom(generateRoomId(), data?.playerName || `Player ${Math.floor(Math.random() * 1000)}`));
+    socket.on('joinWithCode', (data) => joinRoom((typeof data === 'string' ? data : data.code), (typeof data === 'object' && data.playerName ? data.playerName : `Player ${Math.floor(Math.random() * 1000)}`)));
+    socket.on('joinOnline', (data) => {
+      let roomId = Object.keys(rooms).find(id => rooms[id].status === 'waiting' && Object.keys(rooms[id].players).length < MAX_ROOM_SIZE && id.length === 6);
+      joinRoom(roomId || generateRoomId(), data?.playerName || `Player ${Math.floor(Math.random() * 1000)}`);
     });
 
-    socket.on('joinWithCode', (data: { code: string, playerName?: string } | string) => {
-      let code = '';
-      let playerName = '';
-      if (typeof data === 'string') {
-        code = data;
-      } else if (data && typeof data === 'object') {
-        code = data.code;
-        playerName = data.playerName || '';
+    // Server-Side Weapon Tracking
+    socket.on('switchWeapon', (weapon: 'gun' | 'pistol' | 'knife') => {
+      const roomId = socketToRoom[socket.id];
+      if (roomId && rooms[roomId]?.players[socket.id] && WEAPON_DAMAGE[weapon]) {
+        rooms[roomId].players[socket.id].currentWeapon = weapon;
       }
-      
-      if (!playerName) {
-        playerName = `Player ${Math.floor(Math.random() * 1000)}`;
-      }
-
-      const room = rooms[code];
-      if (!room) {
-        socket.emit('gameError', 'Room not found');
-        return;
-      }
-      if (Object.keys(room.players).length >= MAX_ROOM_SIZE) {
-        socket.emit('gameError', 'Room is full');
-        return;
-      }
-      if (room.status === 'playing') {
-        socket.emit('gameError', 'Game already started in this room');
-        return;
-      }
-      joinRoom(code, playerName);
-    });
-
-    socket.on('joinOnline', (data?: { playerName?: string }) => {
-      const name = data?.playerName || `Player ${Math.floor(Math.random() * 1000)}`;
-      let roomId = Object.keys(rooms).find(id => {
-        return rooms[id].status === 'waiting' && Object.keys(rooms[id].players).length < MAX_ROOM_SIZE && id.length === 6;
-      });
-
-      if (!roomId) {
-        roomId = generateRoomId();
-      }
-      joinRoom(roomId, name);
     });
 
     socket.on('updatePosition', (data: { position: [number, number, number], rotation: number }) => {
       const roomId = socketToRoom[socket.id];
-      if (roomId && rooms[roomId] && rooms[roomId].players[socket.id]) {
+      if (roomId && rooms[roomId]?.players[socket.id]) {
         const player = rooms[roomId].players[socket.id];
         const deltaTime = (Date.now() - player.lastUpdateTime) / 1000;
         if (deltaTime === 0) return;
-
-        const dx = data.position[0] - player.lastValidPosition[0];
-        const dy = data.position[1] - player.lastValidPosition[1];
-        const dz = data.position[2] - player.lastValidPosition[2];
-        const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
-        const speed = distance / deltaTime;
-        const MAX_SPEED_TOLERANCE = 25;
-
-        if (speed > MAX_SPEED_TOLERANCE) {
-          socket.emit('forcePosition', player.lastValidPosition);
-          return;
+        const dx = data.position[0] - player.lastValidPosition[0], dy = data.position[1] - player.lastValidPosition[1], dz = data.position[2] - player.lastValidPosition[2];
+        if ((Math.sqrt(dx*dx + dy*dy + dz*dz) / deltaTime) > 25) {
+          socket.emit('forcePosition', player.lastValidPosition); return;
         }
-
         player.lastValidPosition = data.position;
         player.lastUpdateTime = Date.now();
         player.position = data.position;
@@ -460,250 +411,187 @@ async function startServer() {
       }
     });
 
-    socket.on('shoot', (data: { start: [number, number, number], end: [number, number, number], color: string }) => {
+    socket.on('shoot', (data) => {
       const roomId = socketToRoom[socket.id];
-      if (roomId) {
-        socket.to(roomId).emit('playerShot', { id: socket.id, ...data });
+      if (roomId) socket.to(roomId).emit('playerShot', { id: socket.id, ...data });
+    });
+
+    // 10/10 SECURE BOT HIT VALIDATION
+    socket.on('hitBot', (botId: string) => {
+      const roomId = socketToRoom[socket.id];
+      if (roomId && rooms[roomId]?.players[socket.id] && rooms[roomId]?.bots[botId]) {
+        const room = rooms[roomId];
+        const shooter = room.players[socket.id];
+        const bot = room.bots[botId];
+
+        if (bot.state !== 'active') return;
+        if (Date.now() - shooter.lastShootTime < 200) return;
+        shooter.lastShootTime = Date.now();
+
+        const dx = shooter.position[0] - bot.position[0], dy = shooter.position[1] - bot.position[1], dz = shooter.position[2] - bot.position[2];
+        if (Math.sqrt(dx*dx + dy*dy + dz*dz) > 120) return;
+
+        if (room.physicsWorld) {
+          const origin = { x: shooter.position[0], y: shooter.position[1], z: shooter.position[2] };
+          const dirX = bot.position[0] - shooter.position[0], dirY = bot.position[1] - shooter.position[1], dirZ = bot.position[2] - shooter.position[2];
+          const len = Math.sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
+          if (len > 0) {
+            const hit = room.physicsWorld.castRay(new RAPIER.Ray(origin, { x: dirX/len, y: dirY/len, z: dirZ/len }), len - 0.2, true);
+            if (hit !== null) return;
+          }
+        }
+
+        const damage = WEAPON_DAMAGE[shooter.currentWeapon] || 1;
+        bot.health -= damage;
+
+        if (bot.health <= 0) {
+          bot.state = 'disabled';
+          bot.disabledUntil = Date.now() + 9999999;
+          shooter.score += 50;
+          
+          // Secure Coin Drop
+          const angle = Math.random() * Math.PI * 2;
+          const coinId = `coin-loot-${Date.now()}-${Math.random()}`;
+          const coin = { id: coinId, position: [bot.position[0] + (Math.cos(angle) * 1.5), 1.2, bot.position[2] + (Math.sin(angle) * 1.5)] as [number, number, number], collected: false };
+          room.coins[coinId] = coin;
+
+          io.to(roomId).emit('botKilled', { botId, shooterId: socket.id, shooterScore: shooter.score, newCoin: coin });
+        } else {
+          io.to(roomId).emit('botHit', { botId, health: bot.health });
+        }
+      }
+    });
+
+    // 10/10 SECURE COIN COLLECTION
+    socket.on('collectCoin', (coinId: string) => {
+      const roomId = socketToRoom[socket.id];
+      if (roomId && rooms[roomId]?.players[socket.id] && rooms[roomId]?.coins[coinId]) {
+        const room = rooms[roomId];
+        const player = room.players[socket.id];
+        const coin = room.coins[coinId];
+
+        const dx = player.position[0] - coin.position[0], dz = player.position[2] - coin.position[2];
+        if (Math.sqrt(dx*dx + dz*dz) > 5) return; // Anti-Magnet Hack
+
+        delete room.coins[coinId];
+        player.score += 100;
+        io.to(roomId).emit('coinCollected', { coinId, playerId: socket.id, playerScore: player.score });
       }
     });
 
     socket.on('hitPlayer', (targetId: string) => {
       const roomId = socketToRoom[socket.id];
-      if (roomId && rooms[roomId] && rooms[roomId].players[targetId] && rooms[roomId].players[socket.id]) {
+      if (roomId && rooms[roomId]?.players[targetId] && rooms[roomId]?.players[socket.id]) {
         const room = rooms[roomId];
         const shooter = room.players[socket.id];
         const target = room.players[targetId];
 
-        // 1. Rate Limiting Check
-        const shootDelay = Date.now() - shooter.lastShootTime;
-        if (shootDelay < 200) {
-          return;
-        }
+        if (Date.now() - shooter.lastShootTime < 200 || !shooter.isAlive || !target.isAlive) return;
         shooter.lastShootTime = Date.now();
 
-        // 2. State Check
-        if (!shooter.isAlive || !target.isAlive) {
-          return;
-        }
+        const dx = shooter.position[0] - target.position[0], dy = shooter.position[1] - target.position[1], dz = shooter.position[2] - target.position[2];
+        if (Math.sqrt(dx*dx + dy*dy + dz*dz) > 120) return;
 
-        // 3. Distance Check
-        const dx = shooter.position[0] - target.position[0];
-        const dy = shooter.position[1] - target.position[1];
-        const dz = shooter.position[2] - target.position[2];
-        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        const MAX_WEAPON_RANGE = 120;
-        if (distance > MAX_WEAPON_RANGE) {
-          return;
-        }
-
-        // 4. Line-of-Sight Check (Wallhack prevention)
         if (room.physicsWorld) {
           const origin = { x: shooter.position[0], y: shooter.position[1], z: shooter.position[2] };
-          const dirX = target.position[0] - shooter.position[0];
-          const dirY = target.position[1] - shooter.position[1];
-          const dirZ = target.position[2] - shooter.position[2];
+          const dirX = target.position[0] - shooter.position[0], dirY = target.position[1] - shooter.position[1], dirZ = target.position[2] - shooter.position[2];
           const len = Math.sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
-          if (len > 0) {
-            const dir = { x: dirX / len, y: dirY / len, z: dirZ / len };
-            const ray = new RAPIER.Ray(origin, dir);
-            // Cast ray up to len - 0.2 to avoid floating-point/target self-collision inaccuracies
-            const hit = room.physicsWorld.castRay(ray, len - 0.2, true);
-            if (hit !== null) {
-              return;
-            }
-          }
+          if (len > 0 && room.physicsWorld.castRay(new RAPIER.Ray(origin, { x: dirX/len, y: dirY/len, z: dirZ/len }), len - 0.2, true) !== null) return;
         }
 
-        // 5. Role and Health Check
         if (shooter.role === 'imposter' && target.role === 'crewmate') {
-          target.health -= 1;
+          target.health -= (WEAPON_DAMAGE[shooter.currentWeapon] || 1); // 10/10 Secure PvP Damage
 
           if (target.health <= 0) {
-            // Execute kill sequence
-            target.isAlive = false;
-            target.state = 'disabled';
-            room.phase = 'voting';
-            room.votingTimer = 30;
-
-            Object.values(room.players).forEach(p => {
-              p.currentVote = null;
-            });
-
-            io.to(roomId).emit('roomUpdate', {
-              players: room.players,
-              status: room.status,
-              playerCount: Object.keys(room.players).length
-            });
-            io.to(roomId).emit('triggerVotingPhase', {
-              players: room.players,
-              killedPlayerId: targetId
-            });
+            target.isAlive = false; target.state = 'disabled';
+            room.phase = 'voting'; room.votingTimer = 30;
+            Object.values(room.players).forEach(p => p.currentVote = null);
+            io.to(roomId).emit('roomUpdate', { players: room.players, status: room.status, playerCount: Object.keys(room.players).length });
+            io.to(roomId).emit('triggerVotingPhase', { players: room.players, killedPlayerId: targetId });
           } else {
-            // First hit: play disabled visual effect and decrement player health
-            target.state = 'disabled';
-            target.disabledUntil = Date.now() + 1500;
-            shooter.score += 50;
-
-            io.to(roomId).emit('playerHit', {
-              targetId,
-              shooterId: socket.id,
-              targetDisabledUntil: target.disabledUntil,
-              shooterScore: shooter.score
-            });
-
-            io.to(roomId).emit('roomUpdate', {
-              players: room.players,
-              status: room.status,
-              playerCount: Object.keys(room.players).length
-            });
+            target.state = 'disabled'; target.disabledUntil = Date.now() + 1500; shooter.score += 50;
+            io.to(roomId).emit('playerHit', { targetId, shooterId: socket.id, targetDisabledUntil: target.disabledUntil, shooterScore: shooter.score });
+            io.to(roomId).emit('roomUpdate', { players: room.players, status: room.status, playerCount: Object.keys(room.players).length });
           }
         }
       }
     });
 
-    socket.on('submitVote', (targetId: string | null) => {
+    socket.on('submitVote', (targetId) => {
       const roomId = socketToRoom[socket.id];
-      if (roomId && rooms[roomId]) {
-        const room = rooms[roomId];
-        const player = room.players[socket.id];
-        if (room.status === 'playing' && room.phase === 'voting' && player && player.isAlive) {
-          player.currentVote = targetId;
-
-          io.to(roomId).emit('roomUpdate', {
-            players: room.players,
-            status: room.status,
-            playerCount: Object.keys(room.players).length
-          });
-        }
+      if (roomId && rooms[roomId]?.players[socket.id] && rooms[roomId].status === 'playing' && rooms[roomId].phase === 'voting' && rooms[roomId].players[socket.id].isAlive) {
+        rooms[roomId].players[socket.id].currentVote = targetId;
+        io.to(roomId).emit('roomUpdate', { players: rooms[roomId].players, status: rooms[roomId].status, playerCount: Object.keys(rooms[roomId].players).length });
       }
     });
 
-    socket.on('taskCompleted', (taskId: string) => {
+    socket.on('taskCompleted', (taskId) => {
       const roomId = socketToRoom[socket.id];
-      if (roomId && rooms[roomId]) {
-        const room = rooms[roomId];
-        if (room.status === 'playing' && room.phase === 'playing') {
-          room.tasks = room.tasks.filter(t => t.id !== taskId);
-          io.to(roomId).emit('tasksUpdate', room.tasks);
-
-          if (room.tasks.length === 0) {
-            room.status = 'waiting';
-            room.phase = 'waiting';
-            io.to(roomId).emit('gameOver', { result: 'crewmates_win', reason: 'tasks_completed' });
-            if (roomIntervals[roomId]) {
-              clearInterval(roomIntervals[roomId]);
-              delete roomIntervals[roomId];
-            }
-          }
+      if (roomId && rooms[roomId]?.status === 'playing' && rooms[roomId].phase === 'playing') {
+        rooms[roomId].tasks = rooms[roomId].tasks.filter(t => t.id !== taskId);
+        io.to(roomId).emit('tasksUpdate', rooms[roomId].tasks);
+        if (rooms[roomId].tasks.length === 0) {
+          rooms[roomId].status = 'waiting'; rooms[roomId].phase = 'waiting';
+          io.to(roomId).emit('gameOver', { result: 'crewmates_win', reason: 'tasks_completed' });
+          if (roomIntervals[roomId]) { clearInterval(roomIntervals[roomId]); delete roomIntervals[roomId]; }
         }
       }
     });
 
     socket.on('hostStartGame', () => {
       const roomId = socketToRoom[socket.id];
-      if (roomId && rooms[roomId]) {
-        const room = rooms[roomId];
-        const playerCount = Object.keys(room.players).length;
-        if (room.hostId === socket.id && playerCount >= MIN_PLAYERS_TO_START && room.status === 'waiting') {
-          startGame(roomId);
-        }
+      if (roomId && rooms[roomId]?.hostId === socket.id && Object.keys(rooms[roomId].players).length >= MIN_PLAYERS_TO_START && rooms[roomId].status === 'waiting') {
+        startGame(roomId);
       }
     });
 
-    socket.on('sendChatMessage', (message: string) => {
+    socket.on('sendChatMessage', (message) => {
       const roomId = socketToRoom[socket.id];
-      if (roomId && rooms[roomId]) {
-        const room = rooms[roomId];
-        const player = room.players[socket.id];
-        if (player) {
-          io.to(roomId).emit('receiveChatMessage', {
-            sender: player.name,
-            message: message,
-            timestamp: Date.now()
-          });
-        }
+      if (roomId && rooms[roomId]?.players[socket.id]) {
+        io.to(roomId).emit('receiveChatMessage', { sender: rooms[roomId].players[socket.id].name, message, timestamp: Date.now() });
       }
     });
 
-    socket.on('webrtc-offer', (data: { sdp: any, targetId: string }) => {
-      io.to(data.targetId).emit('webrtc-offer', { sdp: data.sdp, senderId: socket.id });
-    });
-
-    socket.on('webrtc-answer', (data: { sdp: any, targetId: string }) => {
-      io.to(data.targetId).emit('webrtc-answer', { sdp: data.sdp, senderId: socket.id });
-    });
-
-    socket.on('webrtc-ice-candidate', (data: { candidate: any, targetId: string }) => {
-      io.to(data.targetId).emit('webrtc-ice-candidate', { candidate: data.candidate, senderId: socket.id });
-    });
+    socket.on('webrtc-offer', (data) => io.to(data.targetId).emit('webrtc-offer', { sdp: data.sdp, senderId: socket.id }));
+    socket.on('webrtc-answer', (data) => io.to(data.targetId).emit('webrtc-answer', { sdp: data.sdp, senderId: socket.id }));
+    socket.on('webrtc-ice-candidate', (data) => io.to(data.targetId).emit('webrtc-ice-candidate', { candidate: data.candidate, senderId: socket.id }));
 
     socket.on('disconnect', () => {
       const roomId = socketToRoom[socket.id];
       if (roomId && rooms[roomId]) {
         const room = rooms[roomId];
-        
-        // Reassign host if host leaves
-        if (room.hostId === socket.id) {
-          const remainingIds = Object.keys(room.players).filter(id => id !== socket.id);
-          room.hostId = remainingIds[0] || '';
-        }
-
+        if (room.hostId === socket.id) room.hostId = Object.keys(room.players).filter(id => id !== socket.id)[0] || '';
         delete room.players[socket.id];
         delete socketToRoom[socket.id];
         io.to(roomId).emit('playerLeft', socket.id);
-
         const playerCount = Object.keys(room.players).length;
 
-        // Cancel countdown if player count falls below minimum to start (5)
         if (playerCount < MIN_PLAYERS_TO_START && room.countdownInterval) {
-          clearInterval(room.countdownInterval);
-          delete room.countdownInterval;
-          room.countdown = null;
+          clearInterval(room.countdownInterval); delete room.countdownInterval; room.countdown = null;
           io.to(roomId).emit('countdownUpdate', { countdown: null });
         }
 
-        if (room.status === 'waiting') {
-          io.to(roomId).emit('roomUpdate', {
-            players: room.players,
-            status: room.status,
-            playerCount,
-            hostId: room.hostId,
-            countdown: room.countdown
-          });
-        }
+        if (room.status === 'waiting') io.to(roomId).emit('roomUpdate', { players: room.players, status: room.status, playerCount, hostId: room.hostId, countdown: room.countdown });
 
         if (playerCount === 0) {
-          if (room.countdownInterval) {
-            clearInterval(room.countdownInterval);
-          }
-          if (roomIntervals[roomId]) {
-            clearInterval(roomIntervals[roomId]);
-            delete roomIntervals[roomId];
-          }
+          if (room.countdownInterval) clearInterval(room.countdownInterval);
+          if (roomIntervals[roomId]) { clearInterval(roomIntervals[roomId]); delete roomIntervals[roomId]; }
           delete rooms[roomId];
         }
       }
     });
   });
 
-  // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
+    const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });
     app.use(vite.middlewares);
   } else {
     const staticPath = process.env.STATIC_PATH || path.join(__dirname, 'dist');
     app.use(express.static(staticPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(staticPath, 'index.html'));
-    });
+    app.get('*', (req, res) => res.sendFile(path.join(staticPath, 'index.html')));
   }
 
-  httpServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  httpServer.listen(PORT, '0.0.0.0', () => console.log(`Server running on http://localhost:${PORT}`));
 }
 
 startServer();
