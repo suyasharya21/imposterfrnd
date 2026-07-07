@@ -384,40 +384,40 @@ export default function App() {
 
       {/* Waiting / Lobby UI */}
       {gameState === 'waiting' && (
-        <div className="absolute inset-0 bg-black/95 overflow-y-auto flex flex-col items-center justify-start md:justify-center py-6 md:py-12 z-[140] pointer-events-auto backdrop-blur-xl transition-all duration-500">
+        <div className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center p-6 md:p-12 z-[140] pointer-events-auto backdrop-blur-xl transition-all duration-500">
           {/* Global Back Arrow */}
           <button 
             onClick={() => useGameStore.getState().leaveGame()}
-            className="absolute top-8 left-8 flex items-center gap-2 text-lime-400/60 hover:text-lime-400 transition-colors group z-[150]"
+            className="absolute top-6 left-6 flex items-center gap-2 text-lime-400/60 hover:text-lime-400 transition-colors group z-[150]"
           >
-            <div className="p-2 border border-lime-400/20 rounded-lg group-hover:bg-lime-400/10 transition-all">
-              <ArrowLeft size={24} />
+            <div className="p-1.5 border border-lime-400/20 rounded-lg group-hover:bg-lime-400/10 transition-all">
+              <ArrowLeft size={18} />
             </div>
-            <span className="font-black uppercase text-xs tracking-widest hidden md:block">Return to Base</span>
+            <span className="font-black uppercase text-[10px] tracking-widest hidden md:block">Return to Base</span>
           </button>
 
-          <div className="flex flex-col items-center gap-4 md:gap-6 max-w-xl w-full px-6 my-auto">
+          <div className="flex flex-col items-center gap-4 max-w-md w-full px-4 my-auto">
             <div className="relative text-center">
-              <h2 className="text-5xl md:text-7xl font-black text-lime-400 tracking-tighter uppercase italic animate-pulse">
+              <h2 className="text-3xl md:text-4xl font-black text-lime-400 tracking-tighter uppercase italic animate-pulse">
                 Establishing Link
               </h2>
-              <div className="bg-red-500 text-white text-[10px] font-black px-3 py-1 uppercase tracking-widest mt-2 inline-block">
+              <div className="bg-red-500 text-white text-[9px] font-black px-2.5 py-0.5 uppercase tracking-widest mt-1 inline-block">
                 Awaiting Pilots
               </div>
             </div>
 
-            <div className="w-full bg-[#050a05]/95 border-2 border-lime-400/20 p-6 md:p-8 rounded-2xl flex flex-col gap-5 md:gap-6 shadow-[0_0_50px_rgba(163,230,53,0.15)] relative overflow-hidden">
+            <div className="w-full bg-[#050a05]/95 border border-lime-400/20 p-5 md:p-6 rounded-xl flex flex-col gap-4 shadow-[0_0_40px_rgba(163,230,53,0.1)] relative overflow-hidden">
               {/* Scanline Effect */}
               <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(163,230,53,0.03)_50%,transparent_50%)] bg-[length:100%_4px] opacity-50" />
               
-              <div className="flex justify-between items-end border-b border-lime-400/10 pb-4 relative z-10">
-                <div className="flex flex-col gap-1">
-                  <span className="text-lime-400/40 font-black uppercase text-[10px] tracking-widest">Active Sector</span>
-                  <span className="text-lime-400 font-black text-2xl tracking-[0.1em]">{roomCode}</span>
+              <div className="flex justify-between items-end border-b border-lime-400/10 pb-3 relative z-10">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-lime-400/40 font-black uppercase text-[9px] tracking-widest">Active Sector</span>
+                  <span className="text-lime-400 font-black text-lg tracking-[0.1em]">{roomCode}</span>
                 </div>
-                <div className="flex flex-col items-end gap-1">
-                  <span className="text-lime-400/40 font-black uppercase text-[10px] tracking-widest">Protocol</span>
-                  <span className="text-lime-400 font-black uppercase text-sm bg-lime-400/10 px-3 py-1 border border-lime-400/20 rounded">
+                <div className="flex flex-col items-end gap-0.5">
+                  <span className="text-lime-400/40 font-black uppercase text-[9px] tracking-widest">Protocol</span>
+                  <span className="text-lime-400 font-black uppercase text-[10px] bg-lime-400/10 px-2 py-0.5 border border-lime-400/20 rounded">
                     {gameMode === 'online' ? 'Global Ops' : 'Private Squad'}
                   </span>
                 </div>
@@ -425,68 +425,68 @@ export default function App() {
 
               {/* Status Header */}
               <div className="flex items-center justify-between relative z-10">
-                <div className="flex items-center gap-4">
-                  <div className="flex gap-1.5">
+                <div className="flex items-center gap-3">
+                  <div className="flex gap-1">
                     {Array.from({ length: 8 }).map((_, i) => (
                       <div 
                         key={i} 
-                        className={`w-4 h-4 rounded-full border-2 border-lime-400/30 ${i < currentPlayerCount ? 'bg-lime-400 shadow-[0_0_15px_rgba(163,230,53,0.8)]' : 'bg-transparent animate-pulse'}`}
+                        className={`w-2.5 h-2.5 rounded-full border border-lime-400/30 ${i < currentPlayerCount ? 'bg-lime-400 shadow-[0_0_8px_rgba(163,230,53,0.8)]' : 'bg-transparent animate-pulse'}`}
                       />
                     ))}
                   </div>
-                  <span className="text-lime-400/60 font-black uppercase text-xs tracking-[0.2em]">Synchronization Status</span>
+                  <span className="text-lime-400/60 font-black uppercase text-[10px] tracking-[0.15em]">Sync Status</span>
                 </div>
-                <div className="text-lime-400 font-black text-3xl tabular-nums tracking-tighter">
-                  {currentPlayerCount}<span className="text-lime-400/30 text-xl mx-1">/</span>8
+                <div className="text-lime-400 font-black text-xl tabular-nums tracking-tighter">
+                  {currentPlayerCount}<span className="text-lime-400/30 text-sm mx-1">/</span>8
                 </div>
               </div>
 
               {/* Lobby Countdown display */}
               {lobbyCountdown !== null && (
-                <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-lg flex items-center justify-between z-10 animate-pulse">
-                  <span className="text-amber-400 text-xs font-black uppercase tracking-wider">Engagement auto-starting in:</span>
-                  <span className="text-amber-400 text-xl font-black">{lobbyCountdown}s</span>
+                <div className="bg-amber-500/10 border border-amber-500/30 p-2 rounded-lg flex items-center justify-between z-10 animate-pulse">
+                  <span className="text-amber-400 text-[10px] font-black uppercase tracking-wider">Starting in:</span>
+                  <span className="text-amber-400 text-lg font-black">{lobbyCountdown}s</span>
                 </div>
               )}
 
               {/* Player List */}
-              <div className="bg-black/50 border border-lime-400/10 rounded-xl p-4 flex flex-col gap-3 relative z-10 max-h-[200px] overflow-y-auto custom-scrollbar">
-                <div className="text-[10px] text-lime-400/40 font-black uppercase tracking-widest mb-1 border-b border-lime-400/5 pb-2 flex justify-between">
-                  <span>Pillots In Area</span>
+              <div className="bg-black/50 border border-lime-400/10 rounded-lg p-3 flex flex-col gap-2 relative z-10 max-h-[130px] overflow-y-auto custom-scrollbar">
+                <div className="text-[9px] text-lime-400/40 font-black uppercase tracking-widest mb-0.5 border-b border-lime-400/5 pb-1.5 flex justify-between">
+                  <span>Pilots In Area</span>
                   <span>System Status</span>
                 </div>
                 
                 <div className="flex items-center justify-between group">
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 rounded-full bg-lime-400 shadow-[0_0_8px_rgba(163,230,53,0.8)]" />
-                    <span className="text-white font-black text-sm uppercase">You (Pilot 0) {isHost && <span className="text-amber-400 font-black text-[10px] ml-1">[HOST]</span>}</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-lime-400 shadow-[0_0_6px_rgba(163,230,53,0.8)]" />
+                    <span className="text-white font-black text-xs uppercase">You (Pilot 0) {isHost && <span className="text-amber-400 font-black text-[9px] ml-1">[HOST]</span>}</span>
                   </div>
-                  <span className="text-lime-400/80 text-[10px] font-black uppercase px-2 py-0.5 bg-lime-400/10 border border-lime-400/20 rounded">Ready</span>
+                  <span className="text-lime-400/80 text-[9px] font-black uppercase px-1.5 py-0.5 bg-lime-400/10 border border-lime-400/20 rounded">Ready</span>
                 </div>
 
                 {Object.values(otherPlayers).map((player, idx) => (
                   <div key={player.id} className="flex items-center justify-between animate-in fade-in slide-in-from-left-4 duration-300">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-[#39ff14]" />
-                      <span className="text-white/80 font-black text-sm uppercase">{player.name || `Pilot ${idx + 1}`} {hostId === player.id && <span className="text-amber-500 font-black text-[10px] ml-1">[HOST]</span>}</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#39ff14]" />
+                      <span className="text-white/80 font-black text-xs uppercase">{player.name || `Pilot ${idx + 1}`} {hostId === player.id && <span className="text-amber-500 font-black text-[9px] ml-1">[HOST]</span>}</span>
                     </div>
-                    <span className="text-lime-400/80 text-[10px] font-black uppercase px-2 py-0.5 bg-lime-400/10 border border-lime-400/20 rounded">Synced</span>
+                    <span className="text-lime-400/80 text-[9px] font-black uppercase px-1.5 py-0.5 bg-lime-400/10 border border-lime-400/20 rounded">Synced</span>
                   </div>
                 ))}
 
                 {currentPlayerCount < 5 && (
-                  <div className="flex items-center gap-3 opacity-30 animate-pulse">
-                    <div className="w-2 h-2 rounded-full bg-gray-600" />
-                    <span className="text-gray-400 font-black text-sm uppercase italic">Need at least 5 players to start...</span>
+                  <div className="flex items-center gap-2 opacity-30 animate-pulse">
+                    <div className="w-1.5 h-1.5 rounded-full bg-gray-600" />
+                    <span className="text-gray-400 font-black text-xs uppercase italic">Need at least 5 players to start...</span>
                   </div>
                 )}
               </div>
 
               {/* Room Code Share Section */}
-              <div className="flex flex-col gap-3 relative z-10">
-                <span className="text-[10px] text-lime-400/40 font-black uppercase tracking-[0.3em] text-center">Broadcast Lobby Frequency</span>
+              <div className="flex flex-col gap-2 relative z-10">
+                <span className="text-[9px] text-lime-400/40 font-black uppercase tracking-[0.25em] text-center">Broadcast Lobby Frequency</span>
                 <div className="flex gap-2">
-                  <div className="flex-1 bg-black border-2 border-lime-400/30 px-6 py-3 text-3xl font-black text-lime-400 text-center tracking-[0.3em] rounded-xl flex items-center justify-center">
+                  <div className="flex-1 bg-black border border-lime-400/30 px-4 py-2 text-xl font-black text-lime-400 text-center tracking-[0.25em] rounded-lg flex items-center justify-center">
                     {roomCode}
                   </div>
                   <button 
@@ -496,34 +496,34 @@ export default function App() {
                         sounds.playCollect();
                       }
                     }}
-                    className="aspect-square bg-lime-400 text-black flex items-center justify-center px-5 rounded-xl hover:bg-white hover:scale-105 transition-all active:scale-95 shadow-[0_0_20px_rgba(163,230,53,0.3)]"
+                    className="aspect-square bg-lime-400 text-black flex items-center justify-center px-4 rounded-lg hover:bg-white hover:scale-105 transition-all active:scale-95 shadow-[0_0_15px_rgba(163,230,53,0.2)]"
                     title="Copy Frequency"
                   >
-                    <Copy size={24} strokeWidth={3} />
+                    <Copy size={18} strokeWidth={3} />
                   </button>
                 </div>
               </div>
 
               {/* Progress Bar */}
-              <div className="relative h-1.5 w-full bg-lime-900/20 rounded-full overflow-hidden mt-2">
+              <div className="relative h-1 w-full bg-lime-900/20 rounded-full overflow-hidden">
                 <div 
-                  className="absolute inset-y-0 left-0 bg-lime-400 transition-all duration-1000 ease-out shadow-[0_0_15px_rgba(163,230,53,0.8)]" 
+                  className="absolute inset-y-0 left-0 bg-lime-400 transition-all duration-1000 ease-out shadow-[0_0_8px_rgba(163,230,53,0.8)]" 
                   style={{ width: `${Math.min(100, (currentPlayerCount / 8) * 100)}%` }}
                 />
               </div>
 
               {/* Launch Engagement Controls */}
               {currentPlayerCount >= 5 && (
-                <div className="flex flex-col gap-2 z-10 mt-2">
+                <div className="flex flex-col gap-2 z-10">
                   {isHost ? (
                     <button
                       onClick={() => hostStartGame()}
-                      className="w-full py-4 bg-[#39ff14] text-black font-black text-lg uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-[0_0_25px_rgba(57,255,20,0.5)] rounded-xl"
+                      className="w-full py-2.5 bg-[#39ff14] text-black font-black text-sm uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-[0_0_20px_rgba(57,255,20,0.4)] rounded-lg"
                     >
                       Start Game
                     </button>
                   ) : (
-                    <div className="w-full py-3 bg-lime-950/20 border border-lime-400/30 text-lime-400/70 font-bold uppercase text-center tracking-widest text-xs rounded-xl animate-pulse">
+                    <div className="w-full py-2 bg-lime-950/20 border border-lime-400/30 text-lime-400/70 font-bold uppercase text-center tracking-widest text-[10px] rounded-lg animate-pulse">
                       Awaiting launch permission from host...
                     </div>
                   )}
@@ -531,7 +531,7 @@ export default function App() {
               )}
             </div>
 
-            <p className="text-lime-400/40 text-[10px] text-center font-bold uppercase tracking-[0.2em] animate-pulse">
+            <p className="text-lime-400/40 text-[9px] text-center font-bold uppercase tracking-[0.15em] animate-pulse">
               [ WARNING ]: Combat engagement authorized upon full sync
             </p>
           </div>
