@@ -422,7 +422,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="flex items-center gap-4">
                   <div className="flex gap-1.5">
-                    {Array.from({ length: 3 }).map((_, i) => (
+                    {Array.from({ length: 8 }).map((_, i) => (
                       <div 
                         key={i} 
                         className={`w-4 h-4 rounded-full border-2 border-lime-400/30 ${i < currentPlayerCount ? 'bg-lime-400 shadow-[0_0_15px_rgba(163,230,53,0.8)]' : 'bg-transparent animate-pulse'}`}
@@ -432,7 +432,7 @@ export default function App() {
                   <span className="text-lime-400/60 font-black uppercase text-xs tracking-[0.2em]">Synchronization Status</span>
                 </div>
                 <div className="text-lime-400 font-black text-3xl tabular-nums tracking-tighter">
-                  {currentPlayerCount}<span className="text-lime-400/30 text-xl mx-1">/</span>3
+                  {currentPlayerCount}<span className="text-lime-400/30 text-xl mx-1">/</span>8
                 </div>
               </div>
 
@@ -461,10 +461,10 @@ export default function App() {
                   </div>
                 ))}
 
-                {currentPlayerCount < 3 && (
+                {currentPlayerCount < 5 && (
                   <div className="flex items-center gap-3 opacity-30 animate-pulse">
                     <div className="w-2 h-2 rounded-full bg-gray-600" />
-                    <span className="text-gray-400 font-black text-sm uppercase italic">Searching for reinforcements...</span>
+                    <span className="text-gray-400 font-black text-sm uppercase italic">Need at least 5 players to start...</span>
                   </div>
                 )}
               </div>
@@ -495,7 +495,7 @@ export default function App() {
               <div className="relative h-1.5 w-full bg-lime-900/20 rounded-full overflow-hidden mt-2">
                 <div 
                   className="absolute inset-y-0 left-0 bg-lime-400 transition-all duration-1000 ease-out shadow-[0_0_15px_rgba(163,230,53,0.8)]" 
-                  style={{ width: `${Math.min(100, (currentPlayerCount / 3) * 100)}%` }}
+                  style={{ width: `${Math.min(100, (currentPlayerCount / 8) * 100)}%` }}
                 />
               </div>
             </div>
