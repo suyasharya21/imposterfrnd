@@ -61,28 +61,32 @@ async function startServer() {
   const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
   const httpServer = createServer(app);
 
-  const pubClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-    maxRetriesPerRequest: null,
-    enableOfflineQueue: false
-  });
-  const subClient = pubClient.duplicate();
+  const redisUrl = process.env.REDIS_URL;
+  let ioOptions: any = { cors: { origin: '*' } };
 
-  let lastErrorTime = 0;
-  const logRedisError = (type: string, err: any) => {
-    const now = Date.now();
-    if (now - lastErrorTime > 30000) { // Log at most once every 30 seconds
-      console.warn(`[Redis Connection Warning] ${type} error: ${err.message}. Server is running in local fallback mode.`);
-      lastErrorTime = now;
-    }
-  };
+  if (redisUrl) {
+    const pubClient = new Redis(redisUrl, {
+      maxRetriesPerRequest: null,
+      enableOfflineQueue: false
+    });
+    const subClient = pubClient.duplicate();
 
-  pubClient.on('error', (err) => logRedisError('pubClient', err));
-  subClient.on('error', (err) => logRedisError('subClient', err));
+    let lastErrorTime = 0;
+    const logRedisError = (type: string, err: any) => {
+      const now = Date.now();
+      if (now - lastErrorTime > 30000) { // Log at most once every 30 seconds
+        console.warn(`[Redis Connection Warning] ${type} error: ${err.message}. Server is running in local fallback mode.`);
+        lastErrorTime = now;
+      }
+    };
 
-  const io = new Server(httpServer, {
-    cors: { origin: '*' },
-    adapter: createAdapter(pubClient, subClient)
-  });
+    pubClient.on('error', (err) => logRedisError('pubClient', err));
+    subClient.on('error', (err) => logRedisError('subClient', err));
+
+    ioOptions.adapter = createAdapter(pubClient, subClient);
+  }
+
+  const io = new Server(httpServer, ioOptions);
 
   interface Player {
     id: string;
