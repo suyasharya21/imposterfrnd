@@ -221,6 +221,19 @@ class SoundManager {
     }
   }
 
+  playFootstep() {
+    if (!this.enabled) this.init();
+    if (this.ctx?.state === 'suspended') return;
+    const now = this.ctx!.currentTime;
+    const freq = 50 + Math.random() * 15;
+    const { osc, gain } = this.createOscillator(freq, 'sine');
+    osc.frequency.exponentialRampToValueAtTime(10, now + 0.1);
+    gain.gain.setValueAtTime(0.015, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+    osc.start(now);
+    osc.stop(now + 0.1);
+  }
+
   resume() {
     if (this.ctx?.state === 'suspended') {
       this.ctx.resume();

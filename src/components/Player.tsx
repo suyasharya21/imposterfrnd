@@ -10,6 +10,7 @@ import { PointerLockControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { useGameStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
+import { sounds } from '../lib/sounds';
 
 const SPEED = 14;
 const MAX_LASER_DIST = 100;
@@ -92,6 +93,7 @@ export function Player() {
   const lastBurstShotTime = useRef(0);
   const isBurstActive = useRef(false);
   const lastSpacePressed = useRef(false);
+  const lastFootstepTime = useRef(0);
 
   const gunGroupRef = useRef<THREE.Group>(null);
   const gunVisualRef = useRef<THREE.Group>(null);
@@ -359,6 +361,15 @@ export function Player() {
     const ray = new rapier.Ray(rayOrigin, rayDir);
     const hit = world.castRay(ray, 0.25, true, undefined, undefined, undefined, body.current!);
     const isGrounded = hit !== null;
+
+    // Trigger footstep sound when walking on the ground
+    if (isGrounded && direction.lengthSq() > 0.01) {
+      const stepInterval = 320; // ms between footsteps
+      if (now - lastFootstepTime.current > stepInterval) {
+        sounds.playFootstep();
+        lastFootstepTime.current = now;
+      }
+    }
 
     // Handle Jump - Just a single hop on press (Keyboard or Mobile)
     const spacePressed = k[' '] || mobileInput.jumping;
