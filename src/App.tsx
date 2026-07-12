@@ -351,12 +351,12 @@ export default function App() {
               <img 
                 src="/logo.png" 
                 className="w-20 h-20 md:w-24 md:h-24 rounded-2xl border-2 border-lime-400/20 shadow-[0_0_25px_rgba(163,230,53,0.25)] animate-pulse" 
-                alt="AI Game House Logo" 
+                alt="Arya Game Co. Logo" 
               />
               <div className="flex flex-col items-center gap-1">
                 <span className="text-[10px] text-lime-400/40 font-black tracking-[0.3em] uppercase">Developed By</span>
                 <h2 className="text-lime-400 text-3xl md:text-5xl font-black tracking-[0.25em] uppercase animate-glitch animate-neon-glow">
-                  AI GAME HOUSE
+                  ARYA GAME CO.
                 </h2>
                 <span className="text-[9px] text-lime-400/30 uppercase mt-2 tracking-[0.15em]">© 2026 COMBAT CORE MODULE</span>
               </div>
