@@ -231,19 +231,19 @@ export default function App() {
   const [introStep, setIntroStep] = useState<'studio' | 'title' | 'done'>('studio');
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [hasSeenTutorial, setHasSeenTutorial] = useState(false);
-  const [tutorialActive, setTutorialActive] = useState(false);
+  const tutorialActive = useGameStore(state => state.tutorialActive);
   const [tutorialTime, setTutorialTime] = useState(0);
 
   useEffect(() => {
     if (gameState === 'playing' && !hasSeenTutorial) {
-      setTutorialActive(true);
+      useGameStore.setState({ tutorialActive: true });
       setTutorialTime(0);
       
       const interval = setInterval(() => {
         setTutorialTime(prev => {
           if (prev >= 11) {
             clearInterval(interval);
-            setTutorialActive(false);
+            useGameStore.setState({ tutorialActive: false });
             setHasSeenTutorial(true);
             setTimeout(() => {
               safeRequestPointerLock(document.querySelector('canvas'));
@@ -262,7 +262,7 @@ export default function App() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && tutorialActive) {
         sounds.playClick();
-        setTutorialActive(false);
+        useGameStore.setState({ tutorialActive: false });
         setHasSeenTutorial(true);
         setTimeout(() => {
           safeRequestPointerLock(document.querySelector('canvas'));
@@ -452,7 +452,7 @@ export default function App() {
               <button 
                 onClick={() => {
                   sounds.playClick();
-                  setTutorialActive(false);
+                  useGameStore.setState({ tutorialActive: false });
                   setHasSeenTutorial(true);
                   setTimeout(() => {
                     safeRequestPointerLock(document.querySelector('canvas'));

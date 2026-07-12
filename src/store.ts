@@ -114,6 +114,7 @@ interface GameStore {
   isConnecting: boolean;
   error: string | null;
   forcedPosition: [number, number, number] | null;
+  tutorialActive: boolean;
 
   timerInterval: NodeJS.Timeout | null;
   hostId: string | null;
@@ -186,7 +187,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   playerName: `Pilot-${Math.floor(100 + Math.random() * 900)}`, setPlayerName: (name) => set({ playerName: name }),
   cpuLevel: 1, cpuLevelCleared: false, otherPlayers: {}, playerPosition: [0, 1, 0], playerRotation: 0,
   currentWeapon: 'gun', ammo: { gun: 30, pistol: 20, knife: Infinity }, arenaSeed: 12345, lives: 3,
-  isCursorLocked: false, isConnecting: false, error: null, timerInterval: null,
+  isCursorLocked: false, isConnecting: false, error: null, timerInterval: null, tutorialActive: false,
 
   mobileInput: { move: { x: 0, y: 0 }, look: { x: 0, y: 0 }, shooting: false, jumping: false },
   setMobileInput: (input) => set((state) => ({ mobileInput: { ...state.mobileInput, ...input } })),

@@ -32,6 +32,7 @@ export function Enemy({ data }: { data: EnemyData }) {
   const votingPhase = useGameStore(state => state.votingPhase);
   const isAlive = useGameStore(state => state.isAlive);
   const role = useGameStore(state => state.role);
+  const tutorialActive = useGameStore(state => state.tutorialActive);
 
   const lastShootTime = useRef(0);
   const isAiming = useRef(false);
@@ -192,7 +193,7 @@ export function Enemy({ data }: { data: EnemyData }) {
       return false;
     };
 
-    if (playerState === 'active' && role !== 'imposter') {
+    if (playerState === 'active' && role !== 'imposter' && !tutorialActive) {
       const pPos = new THREE.Vector3(playerPosition[0], playerPosition[1], playerPosition[2]);
       const distToPlayer = currentPos.distanceTo(pPos);
       if (distToPlayer < closestDist && checkVisibility(pPos, distToPlayer)) {
@@ -329,7 +330,9 @@ export function Enemy({ data }: { data: EnemyData }) {
                 const hitOtherPlayer = Object.keys(otherPlayers).includes(userData.name || '');
                 
                 if (userData.name === 'player') {
-                  hitPlayer(data.id);
+                  if (!tutorialActive) {
+                    hitPlayer(data.id);
+                  }
                   addParticles([hitPoint.x, hitPoint.y, hitPoint.z], '#ff0000');
                   addLaser([laserOrigin.x, laserOrigin.y, laserOrigin.z], [hitPoint.x, hitPoint.y, hitPoint.z], '#ff0000');
                 } else if (hitOtherPlayer) {
