@@ -12,6 +12,7 @@ import { TaskOverlay } from './components/TaskOverlay';
 import { VotingAndChatOverlay } from './components/VotingAndChatOverlay';
 import { sounds } from './lib/sounds';
 import { Heart, ArrowLeft, Copy } from 'lucide-react';
+import { GameplayMotionGraphic } from './components/GameplayMotionGraphic';
 
 function HUD() {
   const gameState = useGameStore(state => state.gameState);
@@ -389,18 +390,14 @@ export default function App() {
           <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(163,230,53,0.02)_50%,transparent_50%)] bg-[length:100%_4px] z-50 animate-cyber-pulse" />
 
           {introStep === 'studio' && (
-            <div className="backdrop-blur-xl bg-black/60 border border-lime-400/10 px-10 py-8 rounded-2xl shadow-[0_0_40px_rgba(163,230,53,0.1)] flex flex-col items-center gap-4 animate-in fade-in zoom-in-95 duration-700">
-              <img 
-                src="/logo.png" 
-                className="w-20 h-20 md:w-24 md:h-24 rounded-2xl border-2 border-lime-400/20 shadow-[0_0_25px_rgba(163,230,53,0.25)] animate-pulse" 
-                alt="Arya Game Co. Logo" 
-              />
+            <div className="backdrop-blur-xl bg-black/60 border border-lime-400/10 px-8 py-6 rounded-3xl shadow-[0_0_50px_rgba(163,230,53,0.15)] flex flex-col items-center gap-4 animate-in fade-in zoom-in-95 duration-700 max-w-[380px]">
+              <GameplayMotionGraphic />
               <div className="flex flex-col items-center gap-1">
-                <span className="text-[10px] text-lime-400/40 font-black tracking-[0.3em] uppercase">Developed By</span>
-                <h2 className="text-lime-400 text-3xl md:text-5xl font-black tracking-[0.25em] uppercase animate-glitch animate-neon-glow">
+                <span className="text-[10px] text-lime-400/40 font-black tracking-[0.3em] uppercase mt-2">Developed By</span>
+                <h2 className="text-lime-400 text-3xl md:text-4xl font-black tracking-[0.2em] uppercase animate-glitch animate-neon-glow">
                   ARYA GAME CO.
                 </h2>
-                <span className="text-[9px] text-lime-400/30 uppercase mt-2 tracking-[0.15em]">© 2026 COMBAT CORE MODULE</span>
+                <span className="text-[9px] text-lime-400/30 uppercase mt-1 tracking-[0.15em]">© 2026 COMBAT CORE MODULE</span>
               </div>
             </div>
           )}
