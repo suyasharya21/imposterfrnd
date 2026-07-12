@@ -230,6 +230,48 @@ export default function App() {
   const [joinInput, setJoinInput] = useState('');
   const [introStep, setIntroStep] = useState<'studio' | 'title' | 'done'>('studio');
   const [loadingProgress, setLoadingProgress] = useState(0);
+  const [hasSeenTutorial, setHasSeenTutorial] = useState(false);
+  const [tutorialActive, setTutorialActive] = useState(false);
+  const [tutorialTime, setTutorialTime] = useState(0);
+
+  useEffect(() => {
+    if (gameState === 'playing' && !hasSeenTutorial) {
+      setTutorialActive(true);
+      setTutorialTime(0);
+      
+      const interval = setInterval(() => {
+        setTutorialTime(prev => {
+          if (prev >= 11) {
+            clearInterval(interval);
+            setTutorialActive(false);
+            setHasSeenTutorial(true);
+            setTimeout(() => {
+              safeRequestPointerLock(document.querySelector('canvas'));
+            }, 100);
+            return 11;
+          }
+          return Number((prev + 0.1).toFixed(1));
+        });
+      }, 100);
+      
+      return () => clearInterval(interval);
+    }
+  }, [gameState, hasSeenTutorial]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && tutorialActive) {
+        sounds.playClick();
+        setTutorialActive(false);
+        setHasSeenTutorial(true);
+        setTimeout(() => {
+          safeRequestPointerLock(document.querySelector('canvas'));
+        }, 100);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [tutorialActive]);
 
   useEffect(() => {
     let hasPlayedBoom = false;
@@ -392,6 +434,125 @@ export default function App() {
         </div>
       )}
 
+      {/* Tutorial / Sync Overlay (Only plays once) */}
+      {gameState === 'playing' && tutorialActive && (
+        <div className="absolute inset-0 bg-black/45 backdrop-blur-[8px] z-[190] flex flex-col items-center justify-center p-6 select-none font-mono pointer-events-auto">
+          {/* Futuristic Scanline Effect */}
+          <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(163,230,53,0.02)_50%,transparent_50%)] bg-[length:100%_4px] z-50 animate-cyber-pulse" />
+
+          {/* Tutorial Card */}
+          <div className="backdrop-blur-xl bg-[#030903]/80 border-2 border-lime-400 p-8 md:p-12 rounded-3xl shadow-[0_0_50px_rgba(163,230,53,0.25)] flex flex-col items-center gap-6 max-w-xl w-full relative overflow-hidden text-center animate-in fade-in zoom-in-95 duration-300">
+            {/* Warning header */}
+            <div className="absolute -top-3.5 left-10 bg-lime-400 text-black px-2.5 py-0.5 text-[9px] font-black tracking-widest uppercase">
+              Pilot Sync Protocol
+            </div>
+
+            {/* Skip Button (only during controls phase: first 8s) */}
+            {tutorialTime < 8.0 && (
+              <button 
+                onClick={() => {
+                  sounds.playClick();
+                  setTutorialActive(false);
+                  setHasSeenTutorial(true);
+                  setTimeout(() => {
+                    safeRequestPointerLock(document.querySelector('canvas'));
+                  }, 100);
+                }}
+                className="absolute top-6 right-6 text-lime-400/40 hover:text-lime-400 border border-lime-400/25 hover:border-lime-400 px-3 py-1 rounded text-[9px] font-black uppercase tracking-widest transition-all cursor-pointer z-50 animate-pulse"
+              >
+                Skip [ESC]
+              </button>
+            )}
+
+            {/* Top title */}
+            <div className="flex flex-col gap-1">
+              <span className="text-lime-400 text-xs font-black tracking-[0.2em] uppercase animate-pulse">Neural Interface Sync</span>
+              <h2 className="text-lime-400 text-xl font-black tracking-[0.1em] uppercase">SYSTEM TRAINING SEQUENCER</h2>
+            </div>
+
+            {/* Middle Stage: Motion Graphics Controls explanations */}
+            <div className="h-44 flex items-center justify-center w-full bg-black/40 border border-lime-400/10 rounded-2xl p-4 relative overflow-hidden">
+              {/* Scanline background for explanation box */}
+              <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(163,230,53,0.01)_50%,transparent_50%)] bg-[length:100%_2px]" />
+
+              {/* Step 1: 0.0s to 2.0s - W/A/S/D */}
+              {tutorialTime >= 0.0 && tutorialTime < 2.0 && (
+                <div className="flex flex-col items-center gap-3 w-full animate-in fade-in slide-in-from-bottom-4 duration-300">
+                  <div className="flex gap-2.5">
+                    {['W', 'A', 'S', 'D'].map(key => (
+                      <div key={key} className="w-12 h-12 border-2 border-lime-400 rounded-lg flex items-center justify-center text-lime-400 font-black text-xl shadow-[0_0_12px_rgba(163,230,53,0.3)] animate-pulse">
+                        {key}
+                      </div>
+                    ))}
+                  </div>
+                  <h3 className="text-lime-400 text-base font-black tracking-widest uppercase">Movement & Thrusters</h3>
+                  <p className="text-[11px] text-lime-400/60 max-w-sm leading-relaxed">Use WASD or navigation arrows to move the pilot's ship across the sector coordinates.</p>
+                </div>
+              )}
+
+              {/* Step 2: 2.0s to 4.0s - M1 */}
+              {tutorialTime >= 2.0 && tutorialTime < 4.0 && (
+                <div className="flex flex-col items-center gap-3 w-full animate-in fade-in slide-in-from-bottom-4 duration-300">
+                  <div className="w-14 h-14 border-2 border-lime-400 rounded-lg flex items-center justify-center text-lime-400 font-black text-xl shadow-[0_0_12px_rgba(163,230,53,0.3)] animate-pulse">
+                    M1
+                  </div>
+                  <h3 className="text-lime-400 text-base font-black tracking-widest uppercase">Weapons & Firepower</h3>
+                  <p className="text-[11px] text-lime-400/60 max-w-sm leading-relaxed">Left-click or tap shooting triggers to discharge. Hold rifle down for a 7-bullet automatic burst. Pistol is semi-auto.</p>
+                </div>
+              )}
+
+              {/* Step 3: 4.0s to 6.0s - SPACE */}
+              {tutorialTime >= 4.0 && tutorialTime < 6.0 && (
+                <div className="flex flex-col items-center gap-3 w-full animate-in fade-in slide-in-from-bottom-4 duration-300">
+                  <div className="px-5 h-12 border-2 border-lime-400 rounded-lg flex items-center justify-center text-lime-400 font-black text-base shadow-[0_0_12px_rgba(163,230,53,0.3)] animate-pulse">
+                    SPACEBAR
+                  </div>
+                  <h3 className="text-lime-400 text-base font-black tracking-widest uppercase">Thruster Boost / Jump</h3>
+                  <p className="text-[11px] text-lime-400/60 max-w-sm leading-relaxed">Press SPACE to jump. Steer and boost upward to navigate vertical obstacles and reach elevated platforms.</p>
+                </div>
+              )}
+
+              {/* Step 4: 6.0s to 8.0s - Weapon Swap */}
+              {tutorialTime >= 6.0 && tutorialTime < 8.0 && (
+                <div className="flex flex-col items-center gap-3 w-full animate-in fade-in slide-in-from-bottom-4 duration-300">
+                  <div className="w-12 h-12 border-2 border-lime-400 rounded-lg flex items-center justify-center text-lime-400 font-black text-xl shadow-[0_0_12px_rgba(163,230,53,0.3)] animate-pulse">
+                    Q
+                  </div>
+                  <h3 className="text-lime-400 text-base font-black tracking-widest uppercase">Cycle Weapons</h3>
+                  <p className="text-[11px] text-lime-400/60 max-w-sm leading-relaxed">Press Q or Scroll the Mouse Wheel to rotate active equipment between Rifle, Pistol, and Combat Knife.</p>
+                </div>
+              )}
+
+              {/* Step 5: 8.0s to 11.0s - Game Rules & Levels */}
+              {tutorialTime >= 8.0 && tutorialTime <= 11.0 && (
+                <div className="flex flex-col items-left gap-2 w-full animate-in fade-in duration-500 text-left px-4">
+                  <h3 className="text-lime-400 text-sm font-black tracking-widest uppercase border-b border-lime-400/20 pb-1 w-full text-center">DIRECTIVE DEPLOYMENT PARAMETERS</h3>
+                  <div className="flex flex-col gap-1.5 text-[10px] text-lime-400/70">
+                    <div><span className="text-lime-400 font-black">&gt; COMBAT RUN:</span> Cleanse the arena of all hostiles to warp and unlock the next level.</div>
+                    <div><span className="text-lime-400 font-black">&gt; LEVEL DIFFICULTY:</span> Levels scale in bot spawning count, bot reaction speed, and tactical hazards.</div>
+                    <div><span className="text-lime-400 font-black">&gt; INTEGRITY SYSTEM:</span> Clearing a sector restores +1 Life. Losing all lives severs link.</div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Loading Progress Bar */}
+            <div className="w-full flex flex-col gap-1.5 mt-2">
+              <div className="w-full h-2 bg-lime-950/20 border border-lime-400/25 rounded-full overflow-hidden relative">
+                <div 
+                  className="h-full bg-lime-400 shadow-[0_0_10px_rgba(163,230,53,0.8)] transition-all duration-100 ease-linear"
+                  style={{ width: `${(tutorialTime / 11) * 100}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[9px] text-lime-400/50 font-black uppercase tracking-widest">
+                <span>{tutorialTime < 8.0 ? 'Loading Neural HUD & Controls...' : 'Syncing Rules & Level Params...'}</span>
+                <span className="tabular-nums">{Math.min(100, Math.floor((tutorialTime / 11) * 100))}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Task & Voting Overlays */}
       <TaskOverlay />
       <VotingAndChatOverlay />
@@ -460,7 +621,7 @@ export default function App() {
       )}
 
       {/* Click to Resume Overlay */}
-      {gameState === 'playing' && !isCursorLocked && !isMobile && (
+      {gameState === 'playing' && !isCursorLocked && !isMobile && !tutorialActive && (
         <div 
           className={`absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center z-[50] cursor-pointer pointer-events-auto transition-all ${lockCooldown ? 'opacity-50 grayscale' : 'active:bg-black/40'}`}
           onMouseDown={() => {
