@@ -831,133 +831,197 @@ export default function App() {
 
       {/* Menus */}
       {gameState === 'menu' && (
-        <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-[150] pointer-events-auto backdrop-blur-md text-center">
-          <div className="relative mb-12">
-            <h1 className="text-6xl md:text-8xl font-black text-lime-400 drop-shadow-[0_0_30px_rgba(163,230,53,0.6)] tracking-tighter uppercase italic">
-              imposterfrnd
-            </h1>
-            <div className="absolute -bottom-2 right-0 bg-lime-400 text-black px-2 py-0.5 text-[10px] font-black tracking-widest uppercase">
-              Production V1.0
-            </div>
-          </div>
-
-          {error && (
-            <div className="mb-8 px-6 py-3 bg-red-500/10 border-l-4 border-red-500 text-red-500 font-bold text-sm animate-in fade-in slide-in-from-top-4 duration-300">
-              [ ERROR ]: {error}
-            </div>
-          )}
-
-          {/* Pilot CALLSIGN Input */}
-          <div className="w-full max-w-xl px-6 mb-6">
-            <div className="bg-[#050a05]/80 border-2 border-lime-400/20 p-4 rounded-xl flex items-center justify-between shadow-[0_0_20px_rgba(163,230,53,0.05)]">
-              <span className="text-[10px] text-lime-400/50 font-black uppercase tracking-widest whitespace-nowrap mr-4">PILOT CALLSIGN:</span>
-              <input
-                type="text"
-                value={playerName}
-                onChange={(e) => setPlayerName(e.target.value.toUpperCase().slice(0, 15))}
-                placeholder="ENTER CALLSIGN"
-                className="bg-black border-2 border-lime-400/30 px-3 py-1.5 text-lime-400 font-black uppercase text-sm tracking-widest focus:border-lime-400 outline-none w-full max-w-[240px] rounded text-center"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-xl px-6">
-            {menuView === 'main' ? (
-              <>
-                <button
-                  onMouseEnter={() => sounds.playHover()}
-                  onMouseDown={() => {
-                    sounds.playClick();
-                    startGame('online');
-                    safeRequestPointerLock(document.querySelector('canvas'));
-                  }}
-                  className="flex flex-col items-center justify-center p-6 bg-lime-500/10 border-2 border-lime-400 text-lime-400 rounded hover:bg-lime-400 hover:text-black transition-all group shadow-[0_0_20px_rgba(163,230,53,0.2)] cursor-pointer"
-                >
-                  <span className="text-2xl font-black uppercase tracking-tighter">Play Online</span>
-                  <span className="text-[10px] opacity-60 uppercase font-black mt-1 group-hover:text-black/60">Matchmaking (8P)</span>
-                </button>
-
-                <button
-                  onMouseEnter={() => sounds.playHover()}
-                  onMouseDown={() => {
-                    sounds.playClick();
-                    startGame('cpu');
-                    safeRequestPointerLock(document.querySelector('canvas'));
-                  }}
-                  className="flex flex-col items-center justify-center p-6 bg-blue-500/10 border-2 border-blue-400 text-blue-400 rounded hover:bg-blue-400 hover:text-black transition-all group cursor-pointer"
-                >
-                  <span className="text-2xl font-black uppercase tracking-tighter">Play with CPU</span>
-                  <span className="text-[10px] opacity-60 uppercase font-black mt-1 group-hover:text-black/60">Solo Practice</span>
-                </button>
-
-                <button
-                  onMouseEnter={() => sounds.playHover()}
-                  onMouseDown={() => {
-                    sounds.playClick();
-                    startGame('room');
-                    safeRequestPointerLock(document.querySelector('canvas'));
-                  }}
-                  className="flex flex-col items-center justify-center p-6 bg-fuchsia-500/10 border-2 border-fuchsia-400 text-fuchsia-400 rounded hover:bg-fuchsia-400 hover:text-black transition-all group cursor-pointer"
-                >
-                  <span className="text-2xl font-black uppercase tracking-tighter">Create Room</span>
-                  <span className="text-[10px] opacity-60 uppercase font-black mt-1 group-hover:text-black/60">Private Lobby</span>
-                </button>
-
-                <button
-                  onMouseEnter={() => sounds.playHover()}
-                  onMouseDown={() => {
-                    sounds.playClick();
-                    setMenuView('join');
-                  }}
-                  className="flex flex-col items-center justify-center p-6 bg-yellow-500/10 border-2 border-yellow-400 text-yellow-400 rounded hover:bg-yellow-400 hover:text-black transition-all group cursor-pointer"
-                >
-                  <span className="text-2xl font-black uppercase tracking-tighter">Join Code</span>
-                  <span className="text-[10px] opacity-60 uppercase font-black mt-1 group-hover:text-black/60">Enter room ID</span>
-                </button>
-              </>
-            ) : (
-              <div className="col-span-full bg-black/60 border-2 border-yellow-400/30 p-8 rounded-xl flex flex-col items-center gap-6 animate-in fade-in slide-in-from-bottom-4 duration-300 relative">
-                {/* Back Arrow for Join Scene */}
-                <button 
-                  onClick={() => { sounds.playClick(); setMenuView('main'); }}
-                  className="absolute top-4 left-4 p-2 text-yellow-400/50 hover:text-yellow-400 hover:bg-yellow-400/10 rounded-lg transition-all cursor-pointer"
-                >
-                  <ArrowLeft size={20} />
-                </button>
-
-                <h3 className="text-2xl font-black text-yellow-400 uppercase tracking-widest italic">Join Private Room</h3>
-                <input 
-                  autoFocus
-                  type="text" 
-                  value={joinInput}
-                  onChange={(e) => setJoinInput(e.target.value.toUpperCase())}
-                  placeholder="ENTER 6-CHAR CODE"
-                  className="bg-black border-2 border-yellow-400/50 px-6 py-4 text-3xl font-black text-yellow-400 text-center tracking-[0.5em] focus:border-yellow-400 outline-none w-full"
-                  maxLength={6}
-                />
-                <div className="flex gap-4 w-full">
-                  <button
-                    onClick={() => {
-                      if (joinInput.length === 6) {
-                        sounds.playClick();
-                        setMenuView('main');
-                        startGame('room', joinInput);
-                        safeRequestPointerLock(document.querySelector('canvas'));
-                      }
-                    }}
-                    onMouseEnter={() => sounds.playHover()}
-                    disabled={joinInput.length !== 6}
-                    className="w-full px-8 py-3 bg-yellow-400 text-black font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all disabled:opacity-30 disabled:grayscale cursor-pointer"
-                  >
-                    ENGAGE LINK
-                  </button>
+        <div className="absolute inset-0 bg-black/90 flex items-center justify-center z-[150] pointer-events-auto backdrop-blur-md p-6 overflow-y-auto">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 max-w-6xl w-full mx-auto items-center py-8">
+            
+            {/* Left Column: Rules */}
+            <div className="hidden md:flex flex-col gap-4 animate-in fade-in slide-in-from-left-6 duration-700">
+              <div className="bg-[#050c05]/85 border-2 border-lime-400/25 p-6 rounded-2xl shadow-[0_0_30px_rgba(163,230,53,0.05)] text-left flex flex-col gap-4 relative overflow-hidden">
+                <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(163,230,53,0.01)_50%,transparent_50%)] bg-[length:100%_4px] opacity-40" />
+                <div className="border-b border-lime-400/20 pb-2">
+                  <span className="text-[10px] text-lime-400/40 font-black uppercase tracking-widest">Sector Log</span>
+                  <h3 className="text-lime-400 text-sm font-black uppercase tracking-wider">GAME MATRIX RULES</h3>
+                </div>
+                <div className="flex flex-col gap-4 text-[11px] text-lime-400/70 leading-relaxed font-mono">
+                  <div>
+                    <span className="text-lime-400 font-bold uppercase block mb-1">&gt; SECTOR SECURITY</span>
+                    Eliminate all hostiles in Solo mode to unlock the exit warp and advance levels. In Multiplayer, unmask the hidden Imposter.
+                  </div>
+                  <div>
+                    <span className="text-lime-400 font-bold uppercase block mb-1">&gt; LEVEL DIFFICULTY</span>
+                    Hazards scale as you advance. Cleared sectors restore structural integrity (+1 Life) and supply ammunition.
+                  </div>
+                  <div>
+                    <span className="text-lime-400 font-bold uppercase block mb-1">&gt; WEAPONS PROTOCOL</span>
+                    The Rifle fires rapid 7-bullet automatic burst on click-and-hold. The Pistol requires precise semi-automatic trigger releases.
+                  </div>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
 
-          <div className="mt-16 text-lime-400/40 text-[10px] font-black uppercase tracking-[0.4em] animate-pulse">
-            Terminal Ready . . . Waiting for pilot input
+            {/* Center Column: Main Control (Takes 50% / col-span-2) */}
+            <div className="col-span-1 md:col-span-2 flex flex-col items-center justify-center text-center">
+              <div className="relative mb-8">
+                <h1 className="text-6xl md:text-8xl font-black text-lime-400 drop-shadow-[0_0_30px_rgba(163,230,53,0.6)] tracking-tighter uppercase italic">
+                  imposterfrnd
+                </h1>
+                <div className="absolute -bottom-2 right-0 bg-lime-400 text-black px-2 py-0.5 text-[10px] font-black tracking-widest uppercase">
+                  Production V1.0
+                </div>
+              </div>
+
+              {error && (
+                <div className="mb-6 px-6 py-3 bg-red-500/10 border-l-4 border-red-500 text-red-500 font-bold text-sm animate-in fade-in slide-in-from-top-4 duration-300">
+                  [ ERROR ]: {error}
+                </div>
+              )}
+
+              {/* Pilot CALLSIGN Input */}
+              <div className="w-full max-w-md mb-6">
+                <div className="bg-[#050a05]/80 border-2 border-lime-400/20 p-4 rounded-xl flex items-center justify-between shadow-[0_0_20px_rgba(163,230,53,0.05)]">
+                  <span className="text-[10px] text-lime-400/50 font-black uppercase tracking-widest whitespace-nowrap mr-4">PILOT CALLSIGN:</span>
+                  <input
+                    type="text"
+                    value={playerName}
+                    onChange={(e) => setPlayerName(e.target.value.toUpperCase().slice(0, 15))}
+                    placeholder="ENTER CALLSIGN"
+                    className="bg-black border-2 border-lime-400/30 px-3 py-1.5 text-lime-400 font-black uppercase text-sm tracking-widest focus:border-lime-400 outline-none w-full max-w-[200px] rounded text-center"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-md">
+                {menuView === 'main' ? (
+                  <>
+                    <button
+                      onMouseEnter={() => sounds.playHover()}
+                      onMouseDown={() => {
+                        sounds.playClick();
+                        startGame('online');
+                        safeRequestPointerLock(document.querySelector('canvas'));
+                      }}
+                      className="flex flex-col items-center justify-center p-5 bg-lime-500/10 border-2 border-lime-400 text-lime-400 rounded hover:bg-lime-400 hover:text-black transition-all group shadow-[0_0_20px_rgba(163,230,53,0.2)] cursor-pointer"
+                    >
+                      <span className="text-xl font-black uppercase tracking-tighter">Play Online</span>
+                      <span className="text-[9px] opacity-60 uppercase font-black mt-1 group-hover:text-black/60">Matchmaking (8P)</span>
+                    </button>
+
+                    <button
+                      onMouseEnter={() => sounds.playHover()}
+                      onMouseDown={() => {
+                        sounds.playClick();
+                        startGame('cpu');
+                        safeRequestPointerLock(document.querySelector('canvas'));
+                      }}
+                      className="flex flex-col items-center justify-center p-5 bg-blue-500/10 border-2 border-blue-400 text-blue-400 rounded hover:bg-blue-400 hover:text-black transition-all group cursor-pointer"
+                    >
+                      <span className="text-xl font-black uppercase tracking-tighter">Play with CPU</span>
+                      <span className="text-[9px] opacity-60 uppercase font-black mt-1 group-hover:text-black/60">Solo Practice</span>
+                    </button>
+
+                    <button
+                      onMouseEnter={() => sounds.playHover()}
+                      onMouseDown={() => {
+                        sounds.playClick();
+                        startGame('room');
+                        safeRequestPointerLock(document.querySelector('canvas'));
+                      }}
+                      className="flex flex-col items-center justify-center p-5 bg-fuchsia-500/10 border-2 border-fuchsia-400 text-fuchsia-400 rounded hover:bg-fuchsia-400 hover:text-black transition-all group cursor-pointer"
+                    >
+                      <span className="text-xl font-black uppercase tracking-tighter">Create Room</span>
+                      <span className="text-[9px] opacity-60 uppercase font-black mt-1 group-hover:text-black/60">Private Lobby</span>
+                    </button>
+
+                    <button
+                      onMouseEnter={() => sounds.playHover()}
+                      onMouseDown={() => {
+                        sounds.playClick();
+                        setMenuView('join');
+                      }}
+                      className="flex flex-col items-center justify-center p-5 bg-yellow-500/10 border-2 border-yellow-400 text-yellow-400 rounded hover:bg-yellow-400 hover:text-black transition-all group cursor-pointer"
+                    >
+                      <span className="text-xl font-black uppercase tracking-tighter">Join Code</span>
+                      <span className="text-[9px] opacity-60 uppercase font-black mt-1 group-hover:text-black/60">Enter room ID</span>
+                    </button>
+                  </>
+                ) : (
+                  <div className="col-span-full bg-black/60 border-2 border-yellow-400/30 p-6 rounded-xl flex flex-col items-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300 relative">
+                    <button
+                      onClick={() => setMenuView('main')}
+                      className="absolute top-4 left-4 p-2 text-yellow-400/50 hover:text-yellow-400 hover:bg-yellow-400/10 rounded-lg transition-all cursor-pointer"
+                    >
+                      <ArrowLeft size={20} />
+                    </button>
+                    <span className="text-[10px] text-yellow-400/60 font-black uppercase tracking-widest mt-4">JOIN PRIVATE LOBBY</span>
+                    <input
+                      type="text"
+                      value={joinInput}
+                      onChange={(e) => setJoinInput(e.target.value.toUpperCase().slice(0, 6))}
+                      placeholder="ENTER 6-DIGIT CODE"
+                      className="bg-black border-2 border-yellow-400/40 px-4 py-2 text-yellow-400 font-black uppercase text-base tracking-widest focus:border-yellow-400 outline-none rounded text-center w-full"
+                    />
+                    <button
+                      onMouseDown={() => {
+                        if (joinInput.length === 6) {
+                          sounds.playClick();
+                          startGame('room', joinInput);
+                          safeRequestPointerLock(document.querySelector('canvas'));
+                        }
+                      }}
+                      className="w-full py-3 bg-yellow-400 text-black font-black text-sm uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-[0_0_15px_rgba(234,179,8,0.3)] disabled:opacity-40"
+                      disabled={joinInput.length !== 6}
+                    >
+                      CONNECT TO ROOM
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="mt-16 text-lime-400/40 text-[10px] font-black uppercase tracking-[0.4em] animate-pulse">
+                Terminal Ready . . . Waiting for pilot input
+              </div>
+            </div>
+
+            {/* Right Column: Controls */}
+            <div className="hidden md:flex flex-col gap-4 animate-in fade-in slide-in-from-right-6 duration-700">
+              <div className="bg-[#050c05]/85 border-2 border-lime-400/25 p-6 rounded-2xl shadow-[0_0_30px_rgba(163,230,53,0.05)] text-left flex flex-col gap-4 relative overflow-hidden">
+                <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(163,230,53,0.01)_50%,transparent_50%)] bg-[length:100%_4px] opacity-40" />
+                <div className="border-b border-lime-400/20 pb-2">
+                  <span className="text-[10px] text-lime-400/40 font-black uppercase tracking-widest">Interface Guide</span>
+                  <h3 className="text-lime-400 text-sm font-black uppercase tracking-wider">COMBAT CONTROLS</h3>
+                </div>
+                <div className="flex flex-col gap-3 text-[11px] text-lime-400/70 font-mono">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 border border-lime-400/40 rounded flex items-center justify-center text-lime-400 font-bold text-xs bg-black/60 shadow-[0_0_8px_rgba(163,230,53,0.15)] shrink-0">W/A/S/D</div>
+                    <div>
+                      <span className="text-lime-400 font-bold block uppercase text-[10px]">Movement</span>
+                      Move the combat chassis forward, backward, left, or right.
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 border border-lime-400/40 rounded flex items-center justify-center text-lime-400 font-bold text-xs bg-black/60 shadow-[0_0_8px_rgba(163,230,53,0.15)] shrink-0">M1</div>
+                    <div>
+                      <span className="text-lime-400 font-bold block uppercase text-[10px]">Primary Fire</span>
+                      Left-click or tap shooting triggers to discharge active weapons.
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 border border-lime-400/40 rounded flex items-center justify-center text-lime-400 font-bold text-xs bg-black/60 shadow-[0_0_8px_rgba(163,230,53,0.15)] shrink-0">SPACE</div>
+                    <div>
+                      <span className="text-lime-400 font-bold block uppercase text-[10px]">Vertical Boost</span>
+                      Leap or jump above obstacles and navigate sector block elevations.
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 border border-lime-400/40 rounded flex items-center justify-center text-lime-400 font-bold text-xs bg-black/60 shadow-[0_0_8px_rgba(163,230,53,0.15)] shrink-0">Q</div>
+                    <div>
+                      <span className="text-lime-400 font-bold block uppercase text-[10px]">Weapon Swap</span>
+                      Press Q or Scroll Wheel to cycle active weapons and gear.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       )}
