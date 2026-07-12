@@ -99,6 +99,57 @@ function Joystick({ onMove, className, label }: JoystickProps) {
   );
 }
 
+function TouchPad() {
+  const setMobileInput = useGameStore(state => state.setMobileInput);
+  const activePointerId = useRef<number | null>(null);
+  const lastPointer = useRef({ x: 0, y: 0 });
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    activePointerId.current = e.pointerId;
+    lastPointer.current = { x: e.clientX, y: e.clientY };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (activePointerId.current !== e.pointerId) return;
+    e.stopPropagation();
+    
+    const dx = e.clientX - lastPointer.current.x;
+    const dy = e.clientY - lastPointer.current.y;
+    
+    lastPointer.current = { x: e.clientX, y: e.clientY };
+    
+    // Scale delta value to register clean look swings
+    setMobileInput({ 
+      look: { 
+        x: dx * 0.15, 
+        y: dy * 0.15 
+      } 
+    });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (activePointerId.current === e.pointerId) {
+      e.stopPropagation();
+      activePointerId.current = null;
+      setMobileInput({ look: { x: 0, y: 0 } });
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+  };
+
+  return (
+    <div 
+      className="absolute top-0 right-0 w-1/2 h-full pointer-events-auto select-none touch-none bg-transparent"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      style={{ touchAction: 'none' }}
+    />
+  );
+}
+
 export function MobileControls() {
   const setMobileInput = useGameStore(state => state.setMobileInput);
   const [shooting, setShooting] = useState(false);
@@ -108,60 +159,70 @@ export function MobileControls() {
   }, [shooting, setMobileInput]);
 
   return (
-    <div className="absolute inset-0 pointer-events-none z-50 flex flex-col justify-end pb-12 px-4 select-none">
-      <div className="flex justify-between items-end w-full pointer-events-auto gap-2">
-        {/* Left Stick - Move */}
+    <div className="absolute inset-0 pointer-events-none z-20 select-none">
+      {/* Left Stick (Move) */}
+      <div 
+        className="absolute bottom-8 left-8 pointer-events-auto"
+        onPointerDown={(e) => e.stopPropagation()}
+      >
         <Joystick 
           label="Move"
           onMove={(x, y) => setMobileInput({ move: { x, y } })} 
         />
+      </div>
 
-        {/* Shoot Button */}
-        <div className="flex flex-col gap-4 mb-2">
-          <button
-            className={`w-20 h-20 rounded-full border-4 border-fuchsia-500 flex items-center justify-center active:scale-95 transition-all touch-none ${shooting ? 'bg-fuchsia-500/50 scale-95' : 'bg-fuchsia-500/20'}`}
-            onPointerDown={(e) => {
-              e.currentTarget.setPointerCapture(e.pointerId);
-              setShooting(true);
-            }}
-            onPointerUp={(e) => {
-              e.currentTarget.releasePointerCapture(e.pointerId);
-              setShooting(false);
-            }}
-            onPointerCancel={(e) => {
-              e.currentTarget.releasePointerCapture(e.pointerId);
-              setShooting(false);
-            }}
-            style={{ touchAction: 'none' }}
-          >
-            <div className="w-12 h-12 bg-fuchsia-500 rounded-full shadow-[0_0_15px_rgba(232,121,249,0.8)]" />
-          </button>
+      {/* Right Screen TouchPad */}
+      <TouchPad />
 
-          <button
-            className="w-16 h-16 self-center rounded-full border-4 border-lime-500/50 bg-lime-500/10 flex items-center justify-center active:scale-95 transition-all touch-none"
-            onPointerDown={(e) => {
-              e.currentTarget.setPointerCapture(e.pointerId);
-              setMobileInput({ jumping: true });
-            }}
-            onPointerUp={(e) => {
-              e.currentTarget.releasePointerCapture(e.pointerId);
-              setMobileInput({ jumping: false });
-            }}
-            onPointerCancel={(e) => {
-              e.currentTarget.releasePointerCapture(e.pointerId);
-              setMobileInput({ jumping: false });
-            }}
-            style={{ touchAction: 'none' }}
-          >
-            <div className="text-lime-400 font-black text-xs tracking-tighter">JUMP</div>
-          </button>
-        </div>
+      {/* Action Buttons: Jump & Shoot staggered */}
+      <div className="absolute bottom-8 right-8 flex items-center gap-4 pointer-events-auto z-30">
+        {/* Jump */}
+        <button
+          className="w-16 h-16 rounded-full border-4 border-lime-500/50 bg-lime-500/10 flex items-center justify-center active:scale-95 transition-all touch-none select-none shadow-[0_0_15px_rgba(163,230,53,0.15)]"
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            e.currentTarget.setPointerCapture(e.pointerId);
+            setMobileInput({ jumping: true });
+          }}
+          onPointerUp={(e) => {
+            e.stopPropagation();
+            e.currentTarget.releasePointerCapture(e.pointerId);
+            setMobileInput({ jumping: false });
+          }}
+          onPointerCancel={(e) => {
+            e.stopPropagation();
+            e.currentTarget.releasePointerCapture(e.pointerId);
+            setMobileInput({ jumping: false });
+          }}
+          style={{ touchAction: 'none' }}
+        >
+          <span className="text-lime-400 font-black text-xs tracking-tighter">JUMP</span>
+        </button>
 
-        {/* Right Stick - Look */}
-        <Joystick 
-          label="Look"
-          onMove={(x, y) => setMobileInput({ look: { x, y } })} 
-        />
+        {/* Shoot (Red glowing) */}
+        <button
+          className={`w-20 h-20 rounded-full border-4 border-red-500 flex items-center justify-center active:scale-95 transition-all touch-none select-none ${
+            shooting ? 'bg-red-500/50 scale-95 shadow-[0_0_25px_rgba(239,68,68,0.75)]' : 'bg-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.3)]'
+          }`}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            e.currentTarget.setPointerCapture(e.pointerId);
+            setShooting(true);
+          }}
+          onPointerUp={(e) => {
+            e.stopPropagation();
+            e.currentTarget.releasePointerCapture(e.pointerId);
+            setShooting(false);
+          }}
+          onPointerCancel={(e) => {
+            e.stopPropagation();
+            e.currentTarget.releasePointerCapture(e.pointerId);
+            setShooting(false);
+          }}
+          style={{ touchAction: 'none' }}
+        >
+          <div className="w-12 h-12 bg-red-500 rounded-full shadow-[0_0_15px_rgba(239,68,68,0.8)]" />
+        </button>
       </div>
     </div>
   );

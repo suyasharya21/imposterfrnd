@@ -393,21 +393,12 @@ export function Player() {
     // Mobile Look Rotation
     if (Math.abs(mobileInput.look.x) > 0.01 || Math.abs(mobileInput.look.y) > 0.01) {
       const lookSpeed = 2.0 * delta;
-      // Yaw (Left/Right) - Rotate around Y axis
-      // Joystick Right (x > 0) -> Turn Right (negative rotation around Y in standard right-handed? No, usually -Y is right? Let's test)
-      // PointerLockControls: moving mouse right -> camera rotates right.
-      // Euler Y decreases?
       camera.rotation.y -= mobileInput.look.x * lookSpeed;
-      
-      // Pitch (Up/Down) - Rotate around X axis
-      // Joystick Up (y < 0) -> Look Up.
-      // Looking up means increasing X rotation? Or decreasing?
-      // Usually looking up is positive X?
-      // Let's try standard mapping.
       camera.rotation.x -= mobileInput.look.y * lookSpeed;
-      
-      // Clamp pitch to avoid flipping
       camera.rotation.x = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, camera.rotation.x));
+      
+      // Reset mobile look state so swipe deltas are not applied continuously
+      useGameStore.getState().setMobileInput({ look: { x: 0, y: 0 } });
     }
 
     // Update camera position - strictly follow with zero lag for FPS stability and wall rendering synchronization

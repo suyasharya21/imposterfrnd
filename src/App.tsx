@@ -11,45 +11,20 @@ import { useGameStore } from './store';
 import { TaskOverlay } from './components/TaskOverlay';
 import { VotingAndChatOverlay } from './components/VotingAndChatOverlay';
 import { sounds } from './lib/sounds';
-import { Heart, ArrowLeft, Copy } from 'lucide-react';
+import { Heart, ArrowLeft, Copy, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { StudioLogoIntro } from './components/StudioLogoIntro';
 
 function HUD() {
   const gameState = useGameStore(state => state.gameState);
-  const score = useGameStore(state => state.score);
   const timeLeft = useGameStore(state => state.timeLeft);
   const playerState = useGameStore(state => state.playerState);
   const lives = useGameStore(state => state.lives);
-  const otherPlayers = useGameStore(state => state.otherPlayers);
   const events = useGameStore(state => state.events);
   const currentWeapon = useGameStore(state => state.currentWeapon);
   const ammo = useGameStore(state => state.ammo);
-  const playerCount = Object.keys(otherPlayers).length + 1;
+  const cycleWeapon = useGameStore(state => state.cycleWeapon);
   const leaveGame = useGameStore(state => state.leaveGame);
   const isMobile = useIsMobile();
-  const playerName = useGameStore(state => state.playerName);
-
-  const enemies = useGameStore(state => state.enemies);
-  const gameMode = useGameStore(state => state.gameMode);
-  const cpuLevel = useGameStore(state => state.cpuLevel);
-
-  const leaderboard = useMemo(() => {
-    const players = [
-      { id: playerName, score: score, isMe: true },
-      ...Object.values(otherPlayers).map(p => ({
-        id: p.name,
-        score: p.score,
-        isMe: false
-      })),
-      ...enemies.map(e => ({
-        id: e.id,
-        score: e.score,
-        isMe: false
-      }))
-    ];
-    // Sort by score descending and take top 4
-    return players.sort((a, b) => b.score - a.score).slice(0, 4);
-  }, [score, otherPlayers, enemies, playerName]);
 
   return (
     <>
@@ -59,119 +34,86 @@ function HUD() {
           <div className={`w-4 h-4 border-2 rounded-full ${playerState === 'disabled' ? 'border-red-500' : 'border-lime-400'}`} />
           <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-1 rounded-full ${playerState === 'disabled' ? 'bg-red-500' : 'bg-lime-400'}`} />
         </div>
-
       </div>
 
-      {/* HUD Left - Score & Leaderboard */}
-      <div className="absolute top-2 left-2 md:top-4 md:left-4 flex flex-col gap-2 md:gap-4 pointer-events-none">
-        <div className="flex flex-col gap-0.5">
-          <div className="text-lime-400 text-lg md:text-2xl font-bold drop-shadow-[0_0_8px_rgba(163,230,53,0.8)]">
-            SCORE: {score.toString().padStart(4, '0')}
+      {/* Minimalist HUD Overlay */}
+      <div className="absolute inset-0 pointer-events-none p-4 flex justify-between items-start z-10">
+        {/* Top Left (Stats & Notifications) */}
+        <div className="bg-black/60 rounded-md p-2 pointer-events-auto backdrop-blur-sm flex flex-col gap-1 border border-lime-400/20 shadow-[0_0_15px_rgba(163,230,53,0.1)]">
+          <div className="flex items-center gap-3">
+            {/* Lives */}
+            <div className="flex gap-0.5">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Heart
+                  key={i}
+                  size={14}
+                  fill={i < lives ? "#a3e635" : "transparent"}
+                  color={i < lives ? "#a3e635" : "#333"}
+                  className="transition-all duration-300"
+                />
+              ))}
+            </div>
+
+            {/* Divider */}
+            <span className="w-[1px] h-3 bg-lime-400/20" />
+
+            {/* Timer */}
+            <div className="flex items-center gap-1 text-[11px] text-lime-400 font-black tabular-nums">
+              <Clock size={11} className="text-lime-400/70" />
+              <span>{Math.floor(timeLeft / 60)}:{(Math.floor(timeLeft) % 60).toString().padStart(2, '0')}</span>
+            </div>
           </div>
-          {gameMode === 'cpu' && (
-            <div className="flex flex-col mt-0.5">
-              <div className="text-yellow-400 text-sm md:text-lg font-black drop-shadow-[0_0_8px_rgba(250,204,21,0.8)] uppercase">
-                LEVEL: {cpuLevel}/10
-              </div>
-              <div className="text-lime-400/80 text-[10px] md:text-xs font-black uppercase">
-                BOTS LEFT: {enemies.filter(e => e.state === 'active').length}
-              </div>
+
+          {/* Event notifications */}
+          {events.length > 0 && (
+            <div className="text-[10px] text-lime-400/80 font-mono truncate w-32 md:w-48 border-t border-lime-400/10 pt-1 mt-0.5 block">
+              &gt; {events[events.length - 1]?.message}
             </div>
           )}
         </div>
 
-        <div className="bg-black/40 border border-lime-400/30 p-2 md:p-3 rounded-lg flex flex-col gap-1 md:gap-2">
-          <div className="text-lime-400/60 text-[10px] md:text-xs font-black uppercase tracking-[0.2em]">Weapon Systems</div>
-          <div className="flex items-end justify-between gap-4">
-            <div className="text-lime-400 text-base md:text-xl font-black uppercase tracking-tighter">
-              {currentWeapon}
-            </div>
-            <div className={`text-xl md:text-3xl font-black ${ammo[currentWeapon] < 5 ? 'text-red-500 animate-pulse' : 'text-lime-400'}`}>
-              {ammo[currentWeapon] === Infinity ? '∞' : ammo[currentWeapon].toString().padStart(2, '0')}
-            </div>
-          </div>
-          {ammo[currentWeapon] !== Infinity && (
-            <div className="w-full bg-lime-900/30 h-1 rounded-full overflow-hidden">
-              <div 
-                className={`h-full transition-all duration-300 ${ammo[currentWeapon] < 5 ? 'bg-red-500' : 'bg-lime-400'}`}
-                style={{ width: `${(ammo[currentWeapon] / (currentWeapon === 'gun' ? 30 : 20)) * 100}%` }}
-              />
-            </div>
-          )}
-        </div>
+        {/* Top Right (Weapon Switch & Leave) */}
+        <div className="flex items-center gap-3">
+          {/* Leave Button */}
+          <button
+            onClick={() => { sounds.playLeave(); leaveGame(); }}
+            onMouseEnter={() => sounds.playHover()}
+            className="px-3 py-1.5 bg-red-500/10 border border-red-500/30 text-red-500 text-[10px] font-black uppercase rounded hover:bg-red-500 hover:text-black transition-all duration-200 pointer-events-auto cursor-pointer"
+          >
+            LEAVE
+          </button>
 
-        <div className="flex gap-1 md:gap-2 mt-1">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Heart
-              key={i}
-              size={isMobile ? 16 : 24}
-              fill={i < lives ? "#a3e635" : "transparent"}
-              color={i < lives ? "#a3e635" : "#333"}
-              className={`${i < lives ? 'drop-shadow-[0_0_8px_rgba(163,230,53,0.8)]' : ''} transition-all duration-300`}
-            />
-          ))}
-        </div>
-        
-        {/* Leaderboard - Hide on mobile if screen is small, or make smaller */}
-        {!isMobile && gameMode !== 'cpu' && (
-          <div className="bg-black/50 border border-lime-900/50 p-3 rounded w-48 flex flex-col gap-1">
-            <div className="text-lime-400/70 text-xs font-bold mb-1 border-b border-lime-900/50 pb-1">LEADERBOARD</div>
-            {leaderboard.map((p, i) => (
-              <div key={p.id} className={`flex justify-between text-sm ${p.isMe ? 'text-lime-400 font-bold' : 'text-lime-400/70'}`}>
-                <span>{i + 1}. {p.id}</span>
-                <span>{p.score}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Minimap - Bottom Left */}
-      <div className="absolute bottom-4 left-4 md:bottom-8 md:left-8 pointer-events-none z-40">
-        <Minimap />
-      </div>
-      
-      {/* HUD Right - Time, Leave, Events */}
-      <div className="absolute top-2 right-2 md:top-4 md:right-4 flex flex-col items-end gap-1 md:gap-2 pointer-events-none z-40">
-        {gameState === 'playing' && (
-          <div className="text-lime-400 text-lg md:text-2xl font-bold drop-shadow-[0_0_8px_rgba(163,230,53,0.8)]">
-            TIME: {Math.floor(timeLeft / 60)}:{(Math.floor(timeLeft) % 60).toString().padStart(2, '0')}
-          </div>
-        )}
-        <button
-          onClick={() => { sounds.playLeave(); leaveGame(); }}
-          onMouseEnter={() => sounds.playHover()}
-          className="px-2 py-1 md:px-4 md:py-2 bg-red-500/20 border border-red-500 text-red-500 text-xs md:text-sm font-bold rounded hover:bg-red-500 hover:text-black transition-all duration-200 pointer-events-auto cursor-pointer"
-        >
-          LEAVE
-        </button>
-        {!isMobile && <div className="text-lime-400/50 text-xs mt-1 uppercase tracking-widest font-bold">ESC to unlock cursor</div>}
-
-        {/* Event Log */}
-        <div className="mt-2 md:mt-4 flex flex-col items-end gap-1 pointer-events-none">
-          {events.slice(-3).map(event => (
-            <div key={event.id} className="text-[10px] md:text-xs font-bold text-fuchsia-400 bg-black/50 px-2 py-1 rounded border border-fuchsia-900/50 animate-pulse">
-              {event.message}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Multiplayer Info */}
-      <div className="absolute top-12 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none">
-        <div className="text-lime-400 text-[10px] md:text-sm font-bold drop-shadow-[0_0_8px_rgba(163,230,53,0.8)] opacity-70">
-          PLAYERS ONLINE: {playerCount}
+          {/* Circular Weapon Cycle Button */}
+          <button
+            onClick={() => {
+              sounds.playClick();
+              cycleWeapon();
+            }}
+            className="w-12 h-12 rounded-full bg-black/60 border border-lime-400 flex flex-col items-center justify-center pointer-events-auto active:scale-95 transition-all shadow-[0_0_15px_rgba(163,230,53,0.2)]"
+          >
+            <span className="text-lime-400 font-black text-sm uppercase leading-none">
+              {currentWeapon === 'gun' ? 'R' : currentWeapon === 'pistol' ? 'P' : 'K'}
+            </span>
+            <span className="text-[8px] text-lime-400/50 font-bold -mt-0.5">
+              {ammo[currentWeapon] === Infinity ? '∞' : ammo[currentWeapon]}
+            </span>
+          </button>
         </div>
       </div>
 
       {/* Damage Overlay */}
       {playerState === 'disabled' && (
-        <div className="absolute inset-0 bg-red-500/20 pointer-events-none flex items-center justify-center">
+        <div className="absolute inset-0 bg-red-500/20 pointer-events-none flex items-center justify-center z-50">
           <div className="text-red-500 text-4xl md:text-6xl font-black tracking-widest drop-shadow-[0_0_20px_rgba(239,68,68,1)] animate-pulse text-center">
             SYSTEM DISABLED
           </div>
         </div>
       )}
+
+      {/* Minimap - Bottom Left */}
+      <div className="absolute bottom-4 left-4 pointer-events-none z-40">
+        <Minimap />
+      </div>
 
       {/* Mobile Controls */}
       {isMobile && gameState === 'playing' && <MobileControls />}
@@ -220,6 +162,8 @@ export default function App() {
   const socket = useGameStore(state => state.socket);
   const playerName = useGameStore(state => state.playerName);
   const setPlayerName = useGameStore(state => state.setPlayerName);
+  const chatHistory = useGameStore(state => state.chatHistory);
+  const tasks = useGameStore(state => state.tasks) || [];
   
   const currentPlayerCount = Object.keys(otherPlayers).length + 1;
   const isHost = socket && hostId === socket.id;
@@ -234,6 +178,25 @@ export default function App() {
   const [hasSeenTutorial, setHasSeenTutorial] = useState(false);
   const tutorialActive = useGameStore(state => state.tutorialActive);
   const [tutorialTime, setTutorialTime] = useState(0);
+  const [isMenuExpanded, setIsMenuExpanded] = useState(false);
+  const [lobbyChatInput, setLobbyChatInput] = useState('');
+
+  const leaderboard = useMemo(() => {
+    const players = [
+      { id: playerName, score: score, isMe: true },
+      ...Object.values(otherPlayers).map(p => ({
+        id: p.name,
+        score: p.score,
+        isMe: false
+      })),
+      ...enemies.map(e => ({
+        id: e.id,
+        score: e.score,
+        isMe: false
+      }))
+    ];
+    return players.sort((a, b) => b.score - a.score);
+  }, [score, otherPlayers, enemies, playerName]);
 
   useEffect(() => {
     if (gameState === 'playing' && !hasSeenTutorial) {
@@ -381,7 +344,7 @@ export default function App() {
       }}
     >
       {/* 3D Canvas */}
-      <div className="absolute inset-0">
+      <div className="absolute inset-0 w-full h-full -z-10">
         <Game />
       </div>      {/* Cinematic Intro Overlays */}
       {introStep !== 'done' && (
@@ -591,6 +554,119 @@ export default function App() {
       <div className="absolute inset-0 pointer-events-none z-[100]">
         {gameState === 'playing' && <HUD />}
       </div>
+
+      {/* Expandable Details Pull-Down Menu */}
+      {gameState === 'playing' && (
+        <>
+          {/* Toggle Tab Button */}
+          <div 
+            onClick={() => {
+              sounds.playClick();
+              setIsMenuExpanded(!isMenuExpanded);
+            }}
+            className="absolute top-0 left-1/2 -translate-x-1/2 bg-black/80 px-6 py-1 rounded-b-xl cursor-pointer pointer-events-auto border-x border-b border-lime-400/30 text-lime-400 hover:text-white flex items-center gap-1 z-[120] hover:bg-black transition-all shadow-[0_0_15px_rgba(163,230,53,0.1)] active:scale-95 animate-pulse"
+          >
+            <span className="text-[9px] font-black uppercase tracking-wider">Lobby Feed</span>
+            {isMenuExpanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+          </div>
+
+          {/* Drawer Panel */}
+          {isMenuExpanded && (
+            <div className="absolute top-8 left-1/2 -translate-x-1/2 w-[92%] md:w-[600px] h-[50vh] md:h-[60vh] bg-black/95 border border-lime-500/50 rounded-xl pointer-events-auto p-4 overflow-hidden flex flex-col md:flex-row gap-4 z-[110] shadow-[0_0_40px_rgba(163,230,53,0.25)] animate-in slide-in-from-top duration-300">
+              {/* Left Column: Comms Chat */}
+              <div className="flex-1 flex flex-col min-h-0 bg-black/50 border border-lime-400/10 rounded-lg p-3">
+                <span className="text-[10px] text-lime-400/60 font-black uppercase tracking-widest mb-2 border-b border-lime-400/10 pb-1">
+                  Lobby Comms
+                </span>
+                <div className="flex-1 overflow-y-auto mb-2 pr-1 flex flex-col gap-2 custom-scrollbar text-xs">
+                  {chatHistory.length === 0 ? (
+                    <div className="flex-1 flex items-center justify-center text-lime-400/20 italic">
+                      No comms feed active...
+                    </div>
+                  ) : (
+                    chatHistory.map((msg, index) => (
+                      <div key={index} className="break-words leading-relaxed text-lime-400/80">
+                        <span className="font-black text-lime-400 uppercase tracking-wide mr-1.5">{msg.sender}:</span>
+                        <span>{msg.message}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <form 
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!lobbyChatInput.trim() || !socket) return;
+                    socket.emit('sendChatMessage', lobbyChatInput);
+                    setLobbyChatInput('');
+                  }}
+                  className="flex gap-2"
+                >
+                  <input
+                    type="text"
+                    value={lobbyChatInput}
+                    onChange={(e) => setLobbyChatInput(e.target.value)}
+                    placeholder="TRANSMIT COMMS..."
+                    className="flex-1 bg-black border border-lime-400/30 focus:border-lime-400 text-lime-400 px-3 py-1.5 text-xs outline-none rounded"
+                  />
+                  <button type="submit" className="bg-lime-400 text-black font-black px-3 text-xs rounded hover:bg-white active:scale-95 transition-all">
+                    SEND
+                  </button>
+                </form>
+              </div>
+
+              {/* Right Column: Scoreboard & Objectives */}
+              <div className="flex-1 flex flex-col gap-3 min-h-0">
+                {/* Leaderboard */}
+                <div className="flex-1 flex flex-col min-h-0 bg-black/50 border border-lime-400/10 rounded-lg p-3">
+                  <span className="text-[10px] text-lime-400/60 font-black uppercase tracking-widest mb-2 border-b border-lime-400/10 pb-1">
+                    Leaderboard
+                  </span>
+                  <div className="flex-1 overflow-y-auto flex flex-col gap-1 pr-1 custom-scrollbar text-xs">
+                    {leaderboard.map((p, i) => (
+                      <div key={p.id} className={`flex justify-between py-0.5 border-b border-lime-400/[0.03] ${p.isMe ? 'text-lime-400 font-black' : 'text-lime-400/70'}`}>
+                        <span>{i + 1}. {p.id}</span>
+                        <span>{p.score} PTS</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Task objectives */}
+                <div className="flex-1 flex flex-col min-h-0 bg-black/50 border border-lime-400/10 rounded-lg p-3">
+                  <span className="text-[10px] text-lime-400/60 font-black uppercase tracking-widest mb-2 border-b border-lime-400/10 pb-1">
+                    Objectives
+                  </span>
+                  <div className="flex-1 overflow-y-auto flex flex-col gap-1 pr-1 custom-scrollbar text-xs">
+                    {gameMode === 'cpu' ? (
+                      <div className="text-lime-400/80 flex flex-col gap-1">
+                        <div className="flex justify-between">
+                          <span>SECTOR LEVEL:</span>
+                          <span className="font-bold text-yellow-400">{cpuLevel}/10</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>HOSTILE BOTS:</span>
+                          <span className="font-bold text-red-400">{enemies.filter(e => e.state === 'active').length} ACTIVE</span>
+                        </div>
+                      </div>
+                    ) : tasks.length === 0 ? (
+                      <div className="text-lime-400/30 italic text-center py-2">
+                        All decryption nodes resolved.
+                      </div>
+                    ) : (
+                      tasks.map(task => (
+                        <div key={task.id} className="flex justify-between items-center text-[10px] text-lime-400/80 py-0.5 border-b border-lime-400/[0.03]">
+                          <span>&gt; DECRYPT NODE</span>
+                          <span className="font-black text-lime-400">[{Math.round(task.x)}, {Math.round(task.z)}]</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* Room Code Display in HUD */}
       {gameState === 'playing' && roomCode && (
