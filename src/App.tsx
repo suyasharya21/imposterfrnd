@@ -836,23 +836,23 @@ export default function App() {
             
             {/* Left Column: Rules */}
             <div className="hidden md:flex flex-col gap-4 animate-in fade-in slide-in-from-left-6 duration-700">
-              <div className="bg-[#050c05]/85 border-2 border-lime-400/25 p-6 rounded-2xl shadow-[0_0_30px_rgba(163,230,53,0.05)] text-left flex flex-col gap-4 relative overflow-hidden">
+              <div className="bg-[#050c05]/85 border-2 border-lime-400/25 p-6 rounded-2xl shadow-[0_0_30px_rgba(163,230,53,0.05)] text-left flex flex-col gap-4 relative overflow-hidden bg-grid-flow">
                 <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(163,230,53,0.01)_50%,transparent_50%)] bg-[length:100%_4px] opacity-40" />
                 <div className="border-b border-lime-400/20 pb-2">
                   <span className="text-[10px] text-lime-400/40 font-black uppercase tracking-widest">Sector Log</span>
                   <h3 className="text-lime-400 text-sm font-black uppercase tracking-wider">GAME MATRIX RULES</h3>
                 </div>
                 <div className="flex flex-col gap-4 text-[11px] text-lime-400/70 leading-relaxed font-mono">
-                  <div>
-                    <span className="text-lime-400 font-bold uppercase block mb-1">&gt; SECTOR SECURITY</span>
+                  <div className="p-3 bg-black/50 border border-lime-400/10 rounded-xl hover:border-lime-400/30 transition-all duration-300 hover:scale-[1.02] transform animate-text-float-1">
+                    <span className="text-lime-400 font-black uppercase block mb-1 tracking-wider">&gt; SECTOR SECURITY</span>
                     Eliminate all hostiles in Solo mode to unlock the exit warp and advance levels. In Multiplayer, unmask the hidden Imposter.
                   </div>
-                  <div>
-                    <span className="text-lime-400 font-bold uppercase block mb-1">&gt; LEVEL DIFFICULTY</span>
+                  <div className="p-3 bg-black/50 border border-lime-400/10 rounded-xl hover:border-lime-400/30 transition-all duration-300 hover:scale-[1.02] transform animate-text-float-2">
+                    <span className="text-lime-400 font-black uppercase block mb-1 tracking-wider">&gt; LEVEL DIFFICULTY</span>
                     Hazards scale as you advance. Cleared sectors restore structural integrity (+1 Life) and supply ammunition.
                   </div>
-                  <div>
-                    <span className="text-lime-400 font-bold uppercase block mb-1">&gt; WEAPONS PROTOCOL</span>
+                  <div className="p-3 bg-black/50 border border-lime-400/10 rounded-xl hover:border-lime-400/30 transition-all duration-300 hover:scale-[1.02] transform animate-text-float-3">
+                    <span className="text-lime-400 font-black uppercase block mb-1 tracking-wider">&gt; WEAPONS PROTOCOL</span>
                     The Rifle fires rapid 7-bullet automatic burst on click-and-hold. The Pistol requires precise semi-automatic trigger releases.
                   </div>
                 </div>
@@ -983,39 +983,39 @@ export default function App() {
 
             {/* Right Column: Controls */}
             <div className="hidden md:flex flex-col gap-4 animate-in fade-in slide-in-from-right-6 duration-700">
-              <div className="bg-[#050c05]/85 border-2 border-lime-400/25 p-6 rounded-2xl shadow-[0_0_30px_rgba(163,230,53,0.05)] text-left flex flex-col gap-4 relative overflow-hidden">
+              <div className="bg-[#050c05]/85 border-2 border-lime-400/25 p-6 rounded-2xl shadow-[0_0_30px_rgba(163,230,53,0.05)] text-left flex flex-col gap-4 relative overflow-hidden bg-grid-flow">
                 <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(163,230,53,0.01)_50%,transparent_50%)] bg-[length:100%_4px] opacity-40" />
                 <div className="border-b border-lime-400/20 pb-2">
                   <span className="text-[10px] text-lime-400/40 font-black uppercase tracking-widest">Interface Guide</span>
                   <h3 className="text-lime-400 text-sm font-black uppercase tracking-wider">COMBAT CONTROLS</h3>
                 </div>
-                <div className="flex flex-col gap-3 text-[11px] text-lime-400/70 font-mono">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 border border-lime-400/40 rounded flex items-center justify-center text-lime-400 font-bold text-xs bg-black/60 shadow-[0_0_8px_rgba(163,230,53,0.15)] shrink-0">W/A/S/D</div>
-                    <div>
-                      <span className="text-lime-400 font-bold block uppercase text-[10px]">Movement</span>
-                      Move the combat chassis forward, backward, left, or right.
+                <div className="flex flex-col gap-3 text-[10px] text-lime-400/70 font-mono">
+                  <div className="flex items-start gap-3 p-2 bg-black/50 border border-lime-400/10 rounded-xl hover:border-lime-400/30 transition-all duration-300 hover:scale-[1.02] transform animate-text-float-1">
+                    <div className="px-2 py-1 border border-lime-400/40 rounded flex items-center justify-center text-lime-400 font-black text-[10px] bg-black shadow-[0_0_8px_rgba(163,230,53,0.15)] shrink-0 min-w-[56px] text-center">W/A/S/D</div>
+                    <div className="flex flex-col">
+                      <span className="text-lime-400 font-bold block uppercase text-[9px] tracking-wider">&gt; NAVIGATION</span>
+                      Move and strafe the pilot's combat chassis.
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 border border-lime-400/40 rounded flex items-center justify-center text-lime-400 font-bold text-xs bg-black/60 shadow-[0_0_8px_rgba(163,230,53,0.15)] shrink-0">M1</div>
-                    <div>
-                      <span className="text-lime-400 font-bold block uppercase text-[10px]">Primary Fire</span>
-                      Left-click or tap shooting triggers to discharge active weapons.
+                  <div className="flex items-start gap-3 p-2 bg-black/50 border border-lime-400/10 rounded-xl hover:border-lime-400/30 transition-all duration-300 hover:scale-[1.02] transform animate-text-float-2">
+                    <div className="px-2 py-1 border border-lime-400/40 rounded flex items-center justify-center text-lime-400 font-black text-[10px] bg-black shadow-[0_0_8px_rgba(163,230,53,0.15)] shrink-0 min-w-[56px] text-center">M1</div>
+                    <div className="flex flex-col">
+                      <span className="text-lime-400 font-bold block uppercase text-[9px] tracking-wider">&gt; DISCHARGE</span>
+                      Left-click trigger. Hold for Rifle / Tap for Pistol.
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 border border-lime-400/40 rounded flex items-center justify-center text-lime-400 font-bold text-xs bg-black/60 shadow-[0_0_8px_rgba(163,230,53,0.15)] shrink-0">SPACE</div>
-                    <div>
-                      <span className="text-lime-400 font-bold block uppercase text-[10px]">Vertical Boost</span>
-                      Leap or jump above obstacles and navigate sector block elevations.
+                  <div className="flex items-start gap-3 p-2 bg-black/50 border border-lime-400/10 rounded-xl hover:border-lime-400/30 transition-all duration-300 hover:scale-[1.02] transform animate-text-float-3">
+                    <div className="px-2 py-1 border border-lime-400/40 rounded flex items-center justify-center text-lime-400 font-black text-[10px] bg-black shadow-[0_0_8px_rgba(163,230,53,0.15)] shrink-0 min-w-[56px] text-center">SPACE</div>
+                    <div className="flex flex-col">
+                      <span className="text-lime-400 font-bold block uppercase text-[9px] tracking-wider">&gt; VERT BOOST</span>
+                      Vertical jump above sector terrain blocks.
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 border border-lime-400/40 rounded flex items-center justify-center text-lime-400 font-bold text-xs bg-black/60 shadow-[0_0_8px_rgba(163,230,53,0.15)] shrink-0">Q</div>
-                    <div>
-                      <span className="text-lime-400 font-bold block uppercase text-[10px]">Weapon Swap</span>
-                      Press Q or Scroll Wheel to cycle active weapons and gear.
+                  <div className="flex items-start gap-3 p-2 bg-black/50 border border-lime-400/10 rounded-xl hover:border-lime-400/30 transition-all duration-300 hover:scale-[1.02] transform animate-text-float-1">
+                    <div className="px-2 py-1 border border-lime-400/40 rounded flex items-center justify-center text-lime-400 font-black text-[10px] bg-black shadow-[0_0_8px_rgba(163,230,53,0.15)] shrink-0 min-w-[56px] text-center">Q / SCRL</div>
+                    <div className="flex flex-col">
+                      <span className="text-lime-400 font-bold block uppercase text-[9px] tracking-wider">&gt; GEAR SWAP</span>
+                      Swap active gear: Rifle, Pistol, or Knife.
                     </div>
                   </div>
                 </div>
