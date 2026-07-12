@@ -12,6 +12,7 @@ import { TaskOverlay } from './components/TaskOverlay';
 import { VotingAndChatOverlay } from './components/VotingAndChatOverlay';
 import { sounds } from './lib/sounds';
 import { Heart, ArrowLeft, Copy } from 'lucide-react';
+import { StudioLogoIntro } from './components/StudioLogoIntro';
 
 function HUD() {
   const gameState = useGameStore(state => state.gameState);
@@ -302,7 +303,7 @@ export default function App() {
     if (introStep === 'studio') {
       const t = setTimeout(() => {
         setIntroStep('title');
-      }, 2500);
+      }, 4000);
       return () => clearTimeout(t);
     }
     if (introStep === 'title') {
@@ -389,20 +390,7 @@ export default function App() {
           <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(163,230,53,0.02)_50%,transparent_50%)] bg-[length:100%_4px] z-50 animate-cyber-pulse" />
 
           {introStep === 'studio' && (
-            <div className="backdrop-blur-xl bg-black/60 border border-lime-400/10 px-10 py-8 rounded-2xl shadow-[0_0_40px_rgba(163,230,53,0.1)] flex flex-col items-center gap-4 animate-in fade-in zoom-in-95 duration-700">
-              <img 
-                src="/logo.png" 
-                className="w-20 h-20 md:w-24 md:h-24 rounded-2xl border-2 border-lime-400/20 shadow-[0_0_25px_rgba(163,230,53,0.25)] animate-pulse" 
-                alt="Arya Game Co. Logo" 
-              />
-              <div className="flex flex-col items-center gap-1">
-                <span className="text-[10px] text-lime-400/40 font-black tracking-[0.3em] uppercase">Developed By</span>
-                <h2 className="text-lime-400 text-3xl md:text-5xl font-black tracking-[0.25em] uppercase animate-glitch animate-neon-glow">
-                  ARYA GAME CO.
-                </h2>
-                <span className="text-[9px] text-lime-400/30 uppercase mt-2 tracking-[0.15em]">© 2026 COMBAT CORE MODULE</span>
-              </div>
-            </div>
+            <StudioLogoIntro />
           )}
 
           {introStep === 'title' && (
