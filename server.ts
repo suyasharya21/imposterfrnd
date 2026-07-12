@@ -62,8 +62,7 @@ async function startServer() {
   const httpServer = createServer(app);
 
   const pubClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-    maxRetriesPerRequest: null,
-    enableOfflineQueue: false
+    maxRetriesPerRequest: null
   });
   const subClient = pubClient.duplicate();
 
