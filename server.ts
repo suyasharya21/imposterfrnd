@@ -58,7 +58,7 @@ const WEAPON_DAMAGE = {
 async function startServer() {
   await RAPIER.init();
   const app = express();
-  const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+  const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
   const httpServer = createServer(app);
 
   const pubClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
